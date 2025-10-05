@@ -1,361 +1,334 @@
 # Quick Start Guide
 
-## 🚀 Get Started in 10 Minutes
+## 🚀 Getting Started in 15 Minutes
 
 This guide will help you deploy your first environment quickly.
 
 ## Prerequisites
 
-Before you begin, ensure you have:
-
-- [ ] AWS Account with admin access
-- [ ] AWS CLI installed and configured
-- [ ] Terraform >= 1.5.0 installed
-- [ ] Git installed
-
-## Step 1: Clone and Setup (2 minutes)
-
 ```bash
-# Clone the repository
-cd /path/to/terraform-aws-enterprise
+# Install required tools
+brew install terraform awscli
 
-# Verify tools are installed
-make version
-
-# Install additional tools if needed
-# make install-tools
+# Verify installations
+terraform version  # Should be >= 1.5.0
+aws --version      # Should be >= 2.0
 ```
 
-## Step 2: Configure AWS Account (3 minutes)
+## Step 1: Configure AWS Credentials
 
 ```bash
-# Configure AWS CLI for dev environment
-aws configure --profile dev
-# Enter your AWS Access Key ID
-# Enter your AWS Secret Access Key
-# Default region: us-east-1
-# Default output format: json
+# Configure AWS CLI
+aws configure
 
-# Verify configuration
-aws sts get-caller-identity --profile dev
+# Or use environment variables
+export AWS_ACCESS_KEY_ID="your-access-key"
+export AWS_SECRET_ACCESS_KEY="your-secret-key"
+export AWS_DEFAULT_REGION="us-east-1"
+
+# Verify access
+aws sts get-caller-identity
 ```
 
-## Step 3: Create Backend Infrastructure (2 minutes)
+## Step 2: Set Up Backend (One-Time Setup)
 
 ```bash
-# This creates S3 buckets and DynamoDB tables for state management
-make setup-backend
+# Get your AWS Account ID
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-# Or manually
-./scripts/setup-backend.sh
+# Create S3 bucket for Terraform state
+aws s3api create-bucket \
+  --bucket terraform-state-dev-${AWS_ACCOUNT_ID} \
+  --region us-east-1
+
+# Enable versioning
+aws s3api put-bucket-versioning \
+  --bucket terraform-state-dev-${AWS_ACCOUNT_ID} \
+  --versioning-configuration Status=Enabled
+
+# Enable encryption
+aws s3api put-bucket-encryption \
+  --bucket terraform-state-dev-${AWS_ACCOUNT_ID} \
+  --server-side-encryption-configuration \
+  '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}'
+
+# Create DynamoDB table for state locking
+aws dynamodb create-table \
+  --table-name terraform-state-lock-dev \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --region us-east-1
 ```
 
-## Step 4: Deploy Networking Layer (3 minutes)
+## Step 3: Deploy Networking Layer
 
 ```bash
+cd layers/networking/environments/dev
+
+# Update backend.conf with your account ID
+sed -i '' "s/\${AWS_ACCOUNT_ID}/${AWS_ACCOUNT_ID}/g" backend.conf
+
 # Initialize Terraform
-make init ENV=dev LAYER=networking
+terraform init -backend-config=backend.conf
 
 # Review what will be created
-make plan ENV=dev LAYER=networking
+terraform plan -var-file=terraform.tfvars
 
-# Apply changes
-make apply ENV=dev LAYER=networking
+# Apply the configuration
+terraform apply -var-file=terraform.tfvars
+
+# Save outputs for later use
+terraform output -json > networking-outputs.json
 ```
 
-## 🎉 Success!
+## Step 4: Deploy Security Layer
 
-You've deployed your first layer! The output will show:
-- VPC ID
-- Subnet IDs
-- NAT Gateway IDs
+```bash
+cd ../../security/environments/dev
+
+# Update backend.conf
+sed -i '' "s/\${AWS_ACCOUNT_ID}/${AWS_ACCOUNT_ID}/g" backend.conf
+
+# Initialize and apply
+terraform init -backend-config=backend.conf
+terraform plan -var-file=terraform.tfvars
+terraform apply -var-file=terraform.tfvars
+```
+
+## Step 5: Deploy Remaining Layers
+
+```bash
+# Deploy in order
+for layer in dns database storage compute monitoring; do
+  echo "Deploying $layer layer..."
+  cd ../../${layer}/environments/dev
+  sed -i '' "s/\${AWS_ACCOUNT_ID}/${AWS_ACCOUNT_ID}/g" backend.conf
+  terraform init -backend-config=backend.conf
+  terraform apply -var-file=terraform.tfvars -auto-approve
+done
+```
+
+## Step 6: Verify Deployment
+
+```bash
+# Check VPC
+aws ec2 describe-vpcs \
+  --filters "Name=tag:Environment,Values=dev" \
+  --query 'Vpcs[*].[VpcId,CidrBlock,Tags[?Key==`Name`].Value|[0]]' \
+  --output table
+
+# Check subnets
+aws ec2 describe-subnets \
+  --filters "Name=tag:Environment,Values=dev" \
+  --query 'Subnets[*].[SubnetId,CidrBlock,AvailabilityZone,Tags[?Key==`Name`].Value|[0]]' \
+  --output table
+
+# Check ECS cluster
+aws ecs list-clusters
+
+# Check RDS (if created)
+aws rds describe-db-instances \
+  --query 'DBInstances[*].[DBInstanceIdentifier,DBInstanceStatus,Endpoint.Address]' \
+  --output table
+```
+
+## Common Customizations
+
+### Change Instance Sizes
+
+Edit `terraform.tfvars`:
+```hcl
+instance_type     = "t3.medium"  # Instead of t3.small
+rds_instance_type = "db.t3.medium"
+```
+
+### Enable/Disable Multi-AZ
+
+```hcl
+enable_multi_az = true  # For production
+enable_multi_az = false # For dev to save costs
+```
+
+### Add Custom Tags
+
+```hcl
+common_tags = {
+  Environment  = "dev"
+  Project      = "my-project"
+  Team         = "platform"
+  CostCenter   = "engineering"
+  Owner        = "john.doe@company.com"
+}
+```
+
+## Automated Deployment Script
+
+```bash
+#!/bin/bash
+# deploy-dev.sh
+
+set -e
+
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+LAYERS=(networking security dns database storage compute monitoring)
+
+echo "🚀 Deploying DEV environment"
+echo "AWS Account: $AWS_ACCOUNT_ID"
+echo ""
+
+for layer in "${LAYERS[@]}"; do
+  echo "📦 Deploying $layer layer..."
+  cd layers/${layer}/environments/dev
+  
+  # Update backend config
+  sed "s/\${AWS_ACCOUNT_ID}/${AWS_ACCOUNT_ID}/g" backend.conf > backend.conf.tmp
+  mv backend.conf.tmp backend.conf
+  
+  # Deploy
+  terraform init -backend-config=backend.conf -reconfigure
+  terraform apply -var-file=terraform.tfvars -auto-approve
+  
+  cd ../../../../
+  echo "✅ $layer layer deployed"
+  echo ""
+done
+
+echo "🎉 DEV environment deployed successfully!"
+```
+
+Make it executable and run:
+```bash
+chmod +x deploy-dev.sh
+./deploy-dev.sh
+```
+
+## Cost Estimation
+
+### Development Environment (~$200-300/month)
+- VPC & Networking: ~$45/month (1 NAT Gateway)
+- RDS t3.small: ~$30/month
+- ECS Fargate (2 tasks): ~$50/month
+- ALB: ~$23/month
+- S3 & CloudWatch: ~$20/month
+- Data Transfer: ~$30/month
+
+### Production Environment (~$1000-1500/month)
+- VPC & Networking: ~$135/month (3 NAT Gateways)
+- RDS r5.xlarge Multi-AZ: ~$500/month
+- ECS Fargate (10 tasks): ~$250/month
+- ALB: ~$23/month
+- CloudFront: ~$50/month
+- S3, CloudWatch, Misc: ~$100/month
+
+## Destroying Resources
+
+**⚠️ WARNING: This will delete all resources!**
+
+```bash
+# Destroy in reverse order
+LAYERS=(monitoring compute storage database dns security networking)
+
+for layer in "${LAYERS[@]}"; do
+  echo "Destroying $layer layer..."
+  cd layers/${layer}/environments/dev
+  terraform destroy -var-file=terraform.tfvars -auto-approve
+  cd ../../../../
+done
+```
+
+## Troubleshooting Quick Fixes
+
+### State Lock Issue
+```bash
+terraform force-unlock <LOCK_ID>
+```
+
+### Resource Already Exists
+```bash
+# Import the resource
+terraform import module.vpc.aws_vpc.main vpc-xxxxx
+```
+
+### Need to Start Over
+```bash
+# Destroy everything
+terraform destroy -auto-approve
+
+# Remove state
+rm -rf .terraform*
+rm terraform.tfstate*
+
+# Re-initialize
+terraform init -backend-config=backend.conf
+```
 
 ## Next Steps
 
-### Deploy All Layers
+1. **Customize Variables**: Edit `terraform.tfvars` files for your needs
+2. **Add Applications**: Deploy your applications to ECS
+3. **Set Up Monitoring**: Configure CloudWatch dashboards and alarms
+4. **Enable CI/CD**: Integrate with GitHub Actions or Jenkins
+5. **Deploy to QA**: Repeat process for QA environment
+6. **Production Deployment**: Follow production checklist in DEPLOYMENT.md
+
+## Useful Commands
 
 ```bash
-# Deploy complete infrastructure for dev environment
-make dev-deploy
-```
+# Show current state
+terraform show
 
-This will deploy in order:
-1. Networking (VPC, Subnets, NAT Gateways)
-2. Security (IAM, KMS)
-3. DNS (Route53)
-4. Database (RDS)
-5. Storage (S3)
-6. Compute (ECS)
-7. Monitoring (CloudWatch)
+# List all resources
+terraform state list
 
-### Check Infrastructure Health
+# Get outputs
+terraform output
 
-```bash
-# Run health check
-make health-check ENV=dev
-```
-
-### View Outputs
-
-```bash
-# See all outputs from a layer
-make output ENV=dev LAYER=networking
-```
-
-## Common Commands
-
-### Development Workflow
-
-```bash
 # Format code
-make fmt
+terraform fmt -recursive
 
 # Validate configuration
-make validate
+terraform validate
 
-# Run security scan
-make security
+# Show plan without applying
+terraform plan -var-file=terraform.tfvars
 
-# Run all tests
-make test
+# Apply specific module
+terraform apply -target=module.vpc
+
+# Refresh state
+terraform refresh
+
+# Show dependency graph
+terraform graph | dot -Tpng > graph.png
 ```
 
-### Managing Environments
+## Getting Help
 
-```bash
-# Deploy to QA
-make qa-deploy
+- 📚 Full Documentation: `docs/`
+- 🔧 Troubleshooting: `docs/TROUBLESHOOTING.md`
+- 📖 Runbook: `docs/RUNBOOK.md`
+- 🏗️ Architecture: `docs/ARCHITECTURE.md`
 
-# Deploy to Production (requires confirmation)
-make prod-deploy
-```
+## Security Checklist
 
-### Troubleshooting
+Before deploying to production:
 
-```bash
-# View state
-make state-list ENV=dev LAYER=networking
-
-# Pull state for backup
-make state-pull ENV=dev LAYER=networking
-
-# Check logs
-aws logs tail /aws/application/enterprise-dev --follow
-```
-
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────────┐
-│                 Internet/Users                   │
-└──────────────────┬──────────────────────────────┘
-                   │
-          ┌────────▼────────┐
-          │   CloudFront    │
-          │   + Route53     │
-          └────────┬────────┘
-                   │
-          ┌────────▼────────┐
-          │   Application   │
-          │   Load Balancer │
-          └────────┬────────┘
-                   │
-    ┌──────────────┴──────────────┐
-    │                             │
-┌───▼────┐    VPC           ┌────▼───┐
-│  ECS   │                  │  ECS   │
-│ Tasks  │                  │ Tasks  │
-│  AZ-1  │                  │  AZ-2  │
-└───┬────┘                  └────┬───┘
-    │                            │
-┌───▼────────────────────────────▼───┐
-│          RDS PostgreSQL             │
-│          Multi-AZ + Replicas        │
-└─────────────────────────────────────┘
-```
-
-## Customization
-
-### Modify Resources
-
-1. Edit layer-specific `terraform.tfvars`:
-   ```bash
-   vim layers/networking/environments/dev/terraform.tfvars
-   ```
-
-2. Plan and apply:
-   ```bash
-   make plan ENV=dev LAYER=networking
-   make apply ENV=dev LAYER=networking
-   ```
-
-### Add New Resources
-
-1. Create/modify module in `modules/` directory
-2. Reference module in layer's `main.tf`
-3. Deploy changes
-
-## Environment-Specific Configuration
-
-Each environment has different sizing:
-
-| Resource | Dev | QA | UAT | Prod |
-|----------|-----|-----|-----|------|
-| EC2 Instance | t3.small | t3.medium | t3.large | t3.xlarge |
-| RDS Instance | db.t3.small | db.t3.medium | db.r5.large | db.r5.xlarge |
-| NAT Gateways | 1 | 2 | 3 | 3 |
-| Multi-AZ | No | Yes | Yes | Yes |
-
-## Cost Optimization Tips
-
-### Development Environment
-```bash
-# Use single NAT Gateway
-single_nat_gateway = true
-
-# Use smaller instances
-instance_type = "t3.small"
-
-# Disable backups or short retention
-backup_retention_days = 1
-```
-
-### Production Environment
-```bash
-# High availability
-one_nat_gateway_per_az = true
-enable_multi_az = true
-
-# Longer backups
-backup_retention_days = 30
-
-# Enable monitoring
-enable_performance_insights = true
-container_insights_enabled = true
-```
-
-## Security Best Practices
-
-1. **Never commit credentials**
-   ```bash
-   # Check before commit
-   git secrets --scan
-   ```
-
-2. **Use Secrets Manager**
-   ```bash
-   # Store database password
-   aws secretsmanager create-secret \
-     --name /enterprise/dev/db-password \
-     --secret-string "your-secure-password"
-   ```
-
-3. **Enable MFA for production**
-   ```bash
-   # Production deployments require MFA
-   make prod-deploy
-   # Will prompt for MFA token
-   ```
+- [ ] Change default passwords in `terraform.tfvars`
+- [ ] Enable MFA on AWS account
+- [ ] Review security group rules
+- [ ] Enable CloudTrail
+- [ ] Set up AWS Config
+- [ ] Configure backup retention
+- [ ] Test disaster recovery
+- [ ] Enable deletion protection on critical resources
 
 ## Support
 
-### Documentation
-- Full README: [README.md](README.md)
-- Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- Deployment Guide: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-- Troubleshooting: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
-- Runbook: [docs/RUNBOOK.md](docs/RUNBOOK.md)
+- Internal Wiki: https://wiki.company.com/terraform
+- Team Slack: #platform-engineering
+- Email: platform-team@company.com
 
-### Getting Help
-- Check troubleshooting guide first
-- Review AWS CloudWatch logs
-- Contact platform team: platform-team@company.com
-- Emergency: Page on-call engineer
+---
 
-## What's Next?
-
-1. **Deploy to other environments**
-   ```bash
-   make qa-deploy
-   make uat-deploy
-   ```
-
-2. **Set up monitoring**
-   ```bash
-   # Check CloudWatch dashboards
-   aws cloudwatch list-dashboards
-   ```
-
-3. **Configure alerting**
-   ```bash
-   # Add email to SNS topic
-   aws sns subscribe \
-     --topic-arn <SNS_TOPIC_ARN> \
-     --protocol email \
-     --notification-endpoint your-email@company.com
-   ```
-
-4. **Review security**
-   ```bash
-   make security
-   ```
-
-5. **Customize for your needs**
-   - Modify resource sizes
-   - Add application-specific services
-   - Configure domain names
-   - Set up CI/CD pipeline
-
-## Advanced Topics
-
-### CI/CD Integration
-```yaml
-# Example GitHub Actions workflow
-name: Terraform Deploy
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v1
-      - name: Deploy
-        run: make dev-deploy
-```
-
-### Multi-Region Deployment
-- Create separate layer directories for each region
-- Use region-specific backend configuration
-- Deploy with `make deploy-all ENV=dev REGION=us-west-2`
-
-### Disaster Recovery
-- Regular state backups: `make backup-state`
-- RDS snapshots automated via retention policy
-- Cross-region replication for critical S3 buckets
-
-## FAQ
-
-**Q: How much will this cost?**
-A: Dev environment: ~$200-300/month, Prod: ~$1000-2000/month (varies by usage)
-
-**Q: How long does deployment take?**
-A: Initial deployment: ~30-45 minutes for all layers
-
-**Q: Can I deploy multiple environments in the same account?**
-A: Yes, environments are isolated by naming and tagging
-
-**Q: How do I destroy everything?**
-A: `make destroy ENV=dev LAYER=<layer>` for each layer in reverse order
-
-**Q: Where are the state files stored?**
-A: S3 buckets: `terraform-state-<env>-<account-id>`
-
-## Congratulations! 🎉
-
-You now have a production-ready AWS infrastructure!
-
-For detailed information, see the [full documentation](README.md).
+**Ready to deploy?** Start with Step 1 above! 🚀

@@ -1,55 +1,34 @@
-# Kms Module
+# KMS Key Module
 
-## Description
+AWS Key Management Service encryption keys.
 
-KMS encryption keys
-
-## Resources Created
-
-- `aws_kms_key`
-- `aws_kms_alias`
+## Features
+- KMS key creation
+- Key rotation
+- Key policies
+- Aliases
+- Multi-region keys support
 
 ## Usage
 
 ```hcl
-module "kms" {
-  source = "./modules/kms"
+module "encryption_key" {
+  source = "../../../modules/kms"
 
-  environment = "production"
-  name        = "my-kms"
-
+  description             = "Encryption key for RDS"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+  
+  key_administrators = [
+    "arn:aws:iam::123456789:role/admin-role"
+  ]
+  
+  key_users = [
+    "arn:aws:iam::123456789:role/application-role"
+  ]
+  
   tags = {
     Environment = "production"
-    Project     = "my-project"
   }
 }
 ```
-
-## Inputs
-
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| environment | Environment name | `string` | n/a | yes |
-| name | Resource name | `string` | n/a | yes |
-| tags | Additional tags | `map(string)` | `{}` | no |
-
-## Outputs
-
-| Name | Description |
-|------|-------------|
-| id | Resource ID |
-| arn | Resource ARN |
-
-## Well-Architected Framework
-
-This module implements AWS Well-Architected Framework best practices:
-
-- **Operational Excellence**: Infrastructure as Code, automated deployments
-- **Security**: Encryption at rest and in transit, least privilege access
-- **Reliability**: Multi-AZ deployments, automated backups
-- **Performance Efficiency**: Right-sizing, auto-scaling
-- **Cost Optimization**: Resource tagging, lifecycle policies
-
-## Examples
-
-See the [examples](./examples) directory for complete usage examples.

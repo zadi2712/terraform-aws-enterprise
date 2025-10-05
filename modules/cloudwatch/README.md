@@ -1,55 +1,45 @@
-# Cloudwatch Module
+# CloudWatch Module
 
-## Description
+Amazon CloudWatch dashboards, alarms, and log groups.
 
-CloudWatch dashboards and alarms
-
-## Resources Created
-
-- `aws_cloudwatch_dashboard`
-- `aws_cloudwatch_metric_alarm`
+## Features
+- CloudWatch Dashboards
+- Metric Alarms
+- Log Groups
+- Metric Filters
+- Composite Alarms
 
 ## Usage
 
 ```hcl
-module "cloudwatch" {
-  source = "./modules/cloudwatch"
+module "monitoring" {
+  source = "../../../modules/cloudwatch"
 
-  environment = "production"
-  name        = "my-cloudwatch"
-
+  dashboard_name = "production-overview"
+  
+  log_groups = {
+    application = {
+      name              = "/aws/application/prod"
+      retention_in_days = 30
+    }
+  }
+  
+  metric_alarms = {
+    high_cpu = {
+      alarm_name          = "high-cpu-utilization"
+      comparison_operator = "GreaterThanThreshold"
+      evaluation_periods  = 2
+      metric_name         = "CPUUtilization"
+      namespace           = "AWS/EC2"
+      period              = 300
+      statistic           = "Average"
+      threshold           = 80
+      alarm_actions       = [module.sns.topic_arn]
+    }
+  }
+  
   tags = {
     Environment = "production"
-    Project     = "my-project"
   }
 }
 ```
-
-## Inputs
-
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| environment | Environment name | `string` | n/a | yes |
-| name | Resource name | `string` | n/a | yes |
-| tags | Additional tags | `map(string)` | `{}` | no |
-
-## Outputs
-
-| Name | Description |
-|------|-------------|
-| id | Resource ID |
-| arn | Resource ARN |
-
-## Well-Architected Framework
-
-This module implements AWS Well-Architected Framework best practices:
-
-- **Operational Excellence**: Infrastructure as Code, automated deployments
-- **Security**: Encryption at rest and in transit, least privilege access
-- **Reliability**: Multi-AZ deployments, automated backups
-- **Performance Efficiency**: Right-sizing, auto-scaling
-- **Cost Optimization**: Resource tagging, lifecycle policies
-
-## Examples
-
-See the [examples](./examples) directory for complete usage examples.

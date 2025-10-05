@@ -1,55 +1,40 @@
-# Sns Module
+# SNS Topic Module
 
-## Description
+Amazon Simple Notification Service for alerts and notifications.
 
-SNS topics and subscriptions
-
-## Resources Created
-
-- `aws_sns_topic`
-- `aws_sns_topic_subscription`
+## Features
+- SNS Topics
+- Email subscriptions
+- SMS subscriptions
+- SQS subscriptions
+- Lambda subscriptions
+- Encryption support
 
 ## Usage
 
 ```hcl
-module "sns" {
-  source = "./modules/sns"
+module "alerts" {
+  source = "../../../modules/sns"
 
-  environment = "production"
-  name        = "my-sns"
-
+  name         = "critical-alerts"
+  display_name = "Critical Alerts"
+  
+  subscriptions = [
+    {
+      protocol = "email"
+      endpoint = "ops-team@company.com"
+    },
+    {
+      protocol = "sms"
+      endpoint = "+1-555-0100"
+    }
+  ]
+  
+  kms_master_key_id = module.kms.key_id
+  
   tags = {
     Environment = "production"
-    Project     = "my-project"
+    AlertLevel  = "critical"
   }
 }
 ```
-
-## Inputs
-
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| environment | Environment name | `string` | n/a | yes |
-| name | Resource name | `string` | n/a | yes |
-| tags | Additional tags | `map(string)` | `{}` | no |
-
-## Outputs
-
-| Name | Description |
-|------|-------------|
-| id | Resource ID |
-| arn | Resource ARN |
-
-## Well-Architected Framework
-
-This module implements AWS Well-Architected Framework best practices:
-
-- **Operational Excellence**: Infrastructure as Code, automated deployments
-- **Security**: Encryption at rest and in transit, least privilege access
-- **Reliability**: Multi-AZ deployments, automated backups
-- **Performance Efficiency**: Right-sizing, auto-scaling
-- **Cost Optimization**: Resource tagging, lifecycle policies
-
-## Examples
-
-See the [examples](./examples) directory for complete usage examples.

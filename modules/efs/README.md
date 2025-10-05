@@ -1,55 +1,35 @@
-# Efs Module
+# EFS File System Module
 
-## Description
+Amazon Elastic File System for shared storage.
 
-EFS file systems
-
-## Resources Created
-
-- `aws_efs_file_system`
-- `aws_efs_mount_target`
+## Features
+- EFS file system
+- Mount targets across AZs
+- Backup policy
+- Lifecycle management
+- Encryption at rest
+- Access points
 
 ## Usage
 
 ```hcl
-module "efs" {
-  source = "./modules/efs"
+module "shared_storage" {
+  source = "../../../modules/efs"
 
-  environment = "production"
-  name        = "my-efs"
-
+  name           = "shared-data"
+  encrypted      = true
+  kms_key_id     = module.kms.key_id
+  
+  vpc_id         = module.vpc.vpc_id
+  subnet_ids     = module.vpc.private_subnet_ids
+  security_group_ids = [module.efs_sg.security_group_id]
+  
+  lifecycle_policy = {
+    transition_to_ia = "AFTER_30_DAYS"
+  }
+  
   tags = {
     Environment = "production"
-    Project     = "my-project"
   }
 }
 ```
-
-## Inputs
-
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| environment | Environment name | `string` | n/a | yes |
-| name | Resource name | `string` | n/a | yes |
-| tags | Additional tags | `map(string)` | `{}` | no |
-
-## Outputs
-
-| Name | Description |
-|------|-------------|
-| id | Resource ID |
-| arn | Resource ARN |
-
-## Well-Architected Framework
-
-This module implements AWS Well-Architected Framework best practices:
-
-- **Operational Excellence**: Infrastructure as Code, automated deployments
-- **Security**: Encryption at rest and in transit, least privilege access
-- **Reliability**: Multi-AZ deployments, automated backups
-- **Performance Efficiency**: Right-sizing, auto-scaling
-- **Cost Optimization**: Resource tagging, lifecycle policies
-
-## Examples
-
-See the [examples](./examples) directory for complete usage examples.

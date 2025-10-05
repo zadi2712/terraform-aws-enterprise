@@ -2,305 +2,319 @@
 
 ## Overview
 
-This runbook provides step-by-step procedures for common operational tasks in the AWS infrastructure.
+This runbook provides standard operating procedures for managing the AWS infrastructure. Use this guide for day-to-day operations, incident response, and routine maintenance.
 
 ## Table of Contents
 
 1. [Daily Operations](#daily-operations)
-2. [Deployment Procedures](#deployment-procedures)
-3. [Incident Response](#incident-response)
-4. [Maintenance Procedures](#maintenance-procedures)
-5. [Backup and Recovery](#backup-and-recovery)
-6. [Scaling Operations](#scaling-operations)
-7. [Security Operations](#security-operations)
+2. [Weekly Tasks](#weekly-tasks)
+3. [Monthly Tasks](#monthly-tasks)
+4. [Incident Response](#incident-response)
+5. [Deployment Procedures](#deployment-procedures)
+6. [Backup and Recovery](#backup-and-recovery)
+7. [Scaling Operations](#scaling-operations)
+8. [Monitoring and Alerting](#monitoring-and-alerting)
 
 ## Daily Operations
 
-### Morning Health Check
+### Morning Checklist
 
-**Frequency:** Daily, 9:00 AM
-
-**Steps:**
 ```bash
 #!/bin/bash
-# Daily health check script
+# daily-health-check.sh
 
-echo "=== AWS Infrastructure Health Check ==="
+echo "=== Daily Infrastructure Health Check ==="
 echo "Date: $(date)"
 echo ""
 
-# Check VPC status
-echo "1. VPC Status:"
-aws ec2 describe-vpcs \
-  --filters "Name=tag:Environment,Values=prod" \
-  --query 'Vpcs[*].[VpcId,State,CidrBlock]' \
-  --output table
+# 1. Check AWS Service Health
+echo "1. AWS Service Health Dashboard"
+echo "   Visit: https://status.aws.amazon.com/"
+echo ""
 
-# Check NAT Gateway health
-echo "2. NAT Gateway Status:"
-aws ec2 describe-nat-gateways \
-  --filter "Name=state,Values=available" \
-  --query 'NatGateways[*].[NatGatewayId,State,VpcId]' \
-  --output table
+# 2. Check critical services
+echo "2. Checking critical services..."
 
-# Check RDS instances
-echo "3. RDS Database Status:"
-aws rds describe-db-instances \
-  --query 'DBInstances[*].[DBInstanceIdentifier,DBInstanceStatus,AvailabilityZone]' \
-  --output table
+# VPCs
+echo "   VPCs:"
+aws ec2 describe-vpcs --query 'Vpcs[*].[VpcId,State,Tags[?Key==`Environment`].Value|[0]]' --output table
 
-# Check ECS services
-echo "4. ECS Service Status:"
-aws ecs list-clusters --query 'clusterArns' --output text | \
-while read cluster; do
-  echo "Cluster: $cluster"
-  aws ecs list-services --cluster $cluster \
-    --query 'serviceArns' --output text | \
-  while read service; do
-    aws ecs describe-services --cluster $cluster --services $service \
-      --query 'services[*].[serviceName,status,runningCount,desiredCount]' \
-      --output table
-  done
-done
+# RDS Instances
+echo "   RDS Instances:"
+aws rds describe-db-instances --query 'DBInstances[*].[DBInstanceIdentifier,DBInstanceStatus,MultiAZ]' --output table
 
-# Check ALB health
-echo "5. Load Balancer Health:"
-aws elbv2 describe-load-balancers \
-  --query 'LoadBalancers[*].[LoadBalancerName,State.Code,DNSName]' \
-  --output table
+# ECS Clusters
+echo "   ECS Clusters:"
+aws ecs list-clusters --query 'clusterArns' --output table
 
-# Check CloudWatch alarms
-echo "6. Active Alarms:"
+# Load Balancers
+echo "   Load Balancers:"
+aws elbv2 describe-load-balancers --query 'LoadBalancers[*].[LoadBalancerName,State.Code]' --output table
+
+# 3. Check recent alarms
+echo "3. Recent CloudWatch Alarms:"
 aws cloudwatch describe-alarms \
   --state-value ALARM \
-  --query 'MetricAlarms[*].[AlarmName,StateValue,StateReason]' \
+  --query 'MetricAlarms[*].[AlarmName,StateValue,StateUpdatedTimestamp]' \
   --output table
 
-# Check recent errors in CloudWatch Logs
-echo "7. Recent Application Errors:"
-aws logs filter-log-events \
-  --log-group-name "/aws/application/enterprise-prod" \
-  --start-time $(($(date +%s) - 3600))000 \
-  --filter-pattern "ERROR" \
-  --query 'events[*].[timestamp,message]' \
-  --output table | head -20
+# 4. Check failed deployments
+echo "4. Recent Failed Deployments:"
+aws ecs list-services --cluster production-cluster | \
+  jq -r '.serviceArns[]' | \
+  xargs -I {} aws ecs describe-services --cluster production-cluster --services {} | \
+  jq -r '.services[] | select(.runningCount < .desiredCount) | .serviceName'
+
+# 5. Cost check
+echo "5. Yesterday's Costs:"
+aws ce get-cost-and-usage \
+  --time-period Start=$(date -d "yesterday" +%Y-%m-%d),End=$(date +%Y-%m-%d) \
+  --granularity DAILY \
+  --metrics BlendedCost \
+  --group-by Type=DIMENSION,Key=SERVICE \
+  --query 'ResultsByTime[0].Groups[?Metrics.BlendedCost.Amount>`10`].[Keys[0],Metrics.BlendedCost.Amount]' \
+  --output table
 
 echo ""
 echo "=== Health Check Complete ==="
 ```
 
-**Expected Results:**
-- All VPCs in "available" state
-- NAT Gateways "available"
-- RDS instances "available"
-- ECS services running count = desired count
-- No ALARM state CloudWatch alarms
-- Minimal ERROR logs
-
-**Actions on Failures:**
-- Document issues in incident tracking system
-- Follow relevant incident response procedures
-- Escalate if critical services affected
-
-### Monitor Resource Usage
-
-**Frequency:** Every 4 hours
+### Log Review
 
 ```bash
+# Check application logs for errors
+aws logs filter-log-events \
+  --log-group-name /aws/application/enterprise-prod \
+  --filter-pattern "ERROR" \
+  --start-time $(date -d "1 hour ago" +%s)000
+
+# Check for 5xx errors in ALB
+aws logs filter-log-events \
+  --log-group-name /aws/elasticloadbalancing/app/production-alb \
+  --filter-pattern "[..., status_code=5*, ...]" \
+  --start-time $(date -d "1 hour ago" +%s)000
+```
+
+### Capacity Monitoring
+
+```bash
+# Check RDS storage
+aws rds describe-db-instances \
+  --query 'DBInstances[*].[DBInstanceIdentifier,AllocatedStorage,MaxAllocatedStorage]' \
+  --output table
+
+# Check ECS task capacity
+aws ecs list-services --cluster production-cluster | \
+  jq -r '.serviceArns[]' | \
+  xargs -I {} aws ecs describe-services --cluster production-cluster --services {} | \
+  jq '.services[] | {name: .serviceName, running: .runningCount, desired: .desiredCount}'
+```
+
+## Weekly Tasks
+
+### Monday: Infrastructure Review
+
+```bash
+# Generate weekly infrastructure report
+cat > weekly-report.md << 'EOF'
+# Weekly Infrastructure Report - $(date +%Y-%m-%d)
+
+## Resource Inventory
+### Compute
+- EC2 Instances: $(aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId,State.Name]' | jq 'length')
+- ECS Tasks: $(aws ecs list-tasks --cluster production-cluster | jq '.taskArns | length')
+
+### Database
+- RDS Instances: $(aws rds describe-db-instances | jq '.DBInstances | length')
+- DynamoDB Tables: $(aws dynamodb list-tables | jq '.TableNames | length')
+
+### Storage
+- S3 Buckets: $(aws s3 ls | wc -l)
+- Total S3 Storage: $(aws s3 ls --recursive s3://all-buckets --summarize | grep "Total Size" | awk '{print $3/1024/1024/1024 " GB"}')
+
+## Cost Analysis
+### Last 7 Days Trend
+$(aws ce get-cost-and-usage \
+  --time-period Start=$(date -d "7 days ago" +%Y-%m-%d),End=$(date +%Y-%m-%d) \
+  --granularity DAILY \
+  --metrics BlendedCost \
+  --output table)
+
+## Action Items
+- [ ] Review and optimize unused resources
+- [ ] Update documentation
+- [ ] Check for available updates
+EOF
+```
+
+### Wednesday: Security Review
+
+```bash
+# Security audit script
 #!/bin/bash
-# Resource utilization check
 
-# ECS cluster utilization
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/ECS \
-  --metric-name CPUUtilization \
-  --dimensions Name=ClusterName,Value=enterprise-prod-cluster \
-  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 300 \
-  --statistics Average,Maximum
+echo "=== Weekly Security Audit ==="
 
-# RDS CPU and connections
+# 1. Check for publicly accessible resources
+echo "1. Checking for public resources..."
+
+# Public S3 buckets
+aws s3api list-buckets --query 'Buckets[*].Name' --output text | \
+  xargs -I {} sh -c 'aws s3api get-bucket-acl --bucket {} | grep -q "AllUsers" && echo "Public bucket: {}"'
+
+# Public RDS instances
+aws rds describe-db-instances \
+  --query 'DBInstances[?PubliclyAccessible==`true`].[DBInstanceIdentifier]' \
+  --output table
+
+# 2. Check security groups for 0.0.0.0/0
+echo "2. Checking security groups..."
+aws ec2 describe-security-groups \
+  --query 'SecurityGroups[?IpPermissions[?IpRanges[?CidrIp==`0.0.0.0/0`]]].{GroupId:GroupId,GroupName:GroupName}' \
+  --output table
+
+# 3. Check IAM users without MFA
+echo "3. Checking IAM users without MFA..."
+aws iam list-users --query 'Users[*].UserName' --output text | \
+  xargs -I {} sh -c 'aws iam list-mfa-devices --user-name {} | grep -q "MFADevices" || echo "No MFA: {}"'
+
+# 4. Check for old access keys (>90 days)
+echo "4. Checking for old access keys..."
+aws iam list-users --query 'Users[*].UserName' --output text | \
+  xargs -I {} aws iam list-access-keys --user-name {} \
+  --query 'AccessKeyMetadata[?CreateDate<=`'$(date -d "90 days ago" -I)'`].[UserName,AccessKeyId,CreateDate]' \
+  --output table
+
+# 5. Check CloudTrail status
+echo "5. Checking CloudTrail..."
+aws cloudtrail describe-trails --query 'trailList[*].[Name,IsLogging]' --output table
+
+echo "=== Security Audit Complete ==="
+```
+
+### Friday: Backup Verification
+
+```bash
+# Verify backups
+#!/bin/bash
+
+echo "=== Backup Verification ==="
+
+# 1. RDS Snapshots
+echo "1. Recent RDS Snapshots:"
+aws rds describe-db-snapshots \
+  --snapshot-type automated \
+  --query 'DBSnapshots[?SnapshotCreateTime>=`'$(date -d "7 days ago" -I)'`].[DBSnapshotIdentifier,SnapshotCreateTime,Status]' \
+  --output table
+
+# 2. EBS Snapshots
+echo "2. Recent EBS Snapshots:"
+aws ec2 describe-snapshots \
+  --owner-ids self \
+  --query 'Snapshots[?StartTime>=`'$(date -d "7 days ago" -I)'`].[SnapshotId,StartTime,State]' \
+  --output table
+
+# 3. S3 Versioning Status
+echo "3. S3 Versioning Status:"
+aws s3api list-buckets --query 'Buckets[*].Name' --output text | \
+  xargs -I {} sh -c 'echo -n "{}: "; aws s3api get-bucket-versioning --bucket {} --query Status --output text'
+
+echo "=== Backup Verification Complete ==="
+```
+
+## Monthly Tasks
+
+### First Monday: Capacity Planning
+
+```bash
+# Generate capacity planning report
+#!/bin/bash
+
+echo "=== Monthly Capacity Planning Report ==="
+echo "Report Date: $(date)"
+echo ""
+
+# RDS Capacity
+echo "## RDS Database Capacity"
 aws cloudwatch get-metric-statistics \
   --namespace AWS/RDS \
-  --metric-name CPUUtilization \
-  --dimensions Name=DBInstanceIdentifier,Value=enterprise-prod-db \
-  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 300 \
-  --statistics Average,Maximum
-
-# S3 bucket sizes
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/S3 \
-  --metric-name BucketSizeBytes \
-  --dimensions Name=BucketName,Value=enterprise-prod-app \
-    Name=StorageType,Value=StandardStorage \
-  --start-time $(date -u -d '1 day ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
+  --metric-name DatabaseConnections \
+  --dimensions Name=DBInstanceIdentifier,Value=production-db \
+  --start-time $(date -d "30 days ago" -I) \
+  --end-time $(date -I) \
   --period 86400 \
-  --statistics Average
-```
+  --statistics Maximum,Average \
+  --query 'Datapoints[*].[Timestamp,Maximum,Average]' \
+  --output table
 
-## Deployment Procedures
-
-### Standard Deployment (Non-Production)
-
-**Pre-Deployment:**
-```bash
-# 1. Create deployment branch
-git checkout -b deploy/feature-name
-
-# 2. Run validation
-terraform validate
-terraform fmt -check -recursive
-tflint
-tfsec .
-
-# 3. Create deployment plan
-cd layers/<layer>/environments/dev
-terraform plan -var-file=terraform.tfvars -out=tfplan
-
-# 4. Review plan with team
-# Share plan output in Slack #deployments channel
-
-# 5. Get approval
-# At least one +1 from team member
-```
-
-**Deployment:**
-```bash
-# 1. Set environment
-export AWS_PROFILE=dev
-
-# 2. Apply changes
-terraform apply tfplan
-
-# 3. Verify deployment
-./scripts/verify-deployment.sh dev
-
-# 4. Monitor for 15 minutes
-watch -n 30 'aws ecs describe-services --cluster enterprise-dev-cluster --services app'
-
-# 5. Document deployment
-# Update deployment log in wiki
-```
-
-**Post-Deployment:**
-```bash
-# 1. Run smoke tests
-curl -I https://dev.example.com/health
-
-# 2. Check CloudWatch metrics
+# ECS Service Scaling
+echo "## ECS Task Count Trends"
 aws cloudwatch get-metric-statistics \
-  --namespace AWS/ApplicationELB \
-  --metric-name TargetResponseTime \
-  --dimensions Name=LoadBalancer,Value=app/enterprise-dev-alb/... \
-  --start-time $(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 60 \
-  --statistics Average
+  --namespace ECS/ContainerInsights \
+  --metric-name RunningTaskCount \
+  --dimensions Name=ServiceName,Value=production-service Name=ClusterName,Value=production-cluster \
+  --start-time $(date -d "30 days ago" -I) \
+  --end-time $(date -I) \
+  --period 86400 \
+  --statistics Maximum,Average \
+  --output table
 
-# 3. Update documentation
-git add docs/
-git commit -m "docs: update after deployment"
-git push origin deploy/feature-name
-
-# 4. Clean up
-rm tfplan
+# Recommendations
+echo ""
+echo "## Recommendations"
+echo "- Review metrics above for scaling decisions"
+echo "- Check for consistently high/low utilization"
+echo "- Plan for upcoming traffic patterns"
 ```
 
-### Production Deployment
+### Third Monday: Cost Optimization
 
-**Requirements:**
-- [ ] Change request approved (ticket #)
-- [ ] Tested in dev and QA environments
-- [ ] Rollback plan documented
-- [ ] Team notified 24 hours in advance
-- [ ] Deployment window scheduled
-- [ ] On-call engineer identified
-
-**Pre-Production Checklist:**
 ```bash
-# 1. Verify no drift in production
-cd layers/<layer>/environments/prod
-terraform plan -var-file=terraform.tfvars
+# Monthly cost optimization review
+#!/bin/bash
 
-# 2. Create database backup
-aws rds create-db-snapshot \
-  --db-instance-identifier enterprise-prod-db \
-  --db-snapshot-identifier pre-deploy-$(date +%Y%m%d%H%M)
+echo "=== Monthly Cost Optimization Review ==="
 
-# 3. Export current state
-terraform state pull > state-backup-$(date +%Y%m%d%H%M).json
+# 1. Idle resources
+echo "1. Idle Resources (potential savings):"
 
-# 4. Document current metrics baseline
-./scripts/capture-baseline-metrics.sh prod
-```
+# Unused Elastic IPs
+echo "   Unused Elastic IPs:"
+aws ec2 describe-addresses \
+  --query 'Addresses[?AssociationId==`null`].[PublicIp,AllocationId]' \
+  --output table
 
-**Production Deployment Window:**
-```bash
-# 1. Announce deployment start
-# Slack: @channel Deployment starting for <change-description>
+# Unattached EBS Volumes
+echo "   Unattached EBS Volumes:"
+aws ec2 describe-volumes \
+  --filters Name=status,Values=available \
+  --query 'Volumes[*].[VolumeId,Size,VolumeType,CreateTime]' \
+  --output table
 
-# 2. Enable maintenance mode (if applicable)
-aws ecs update-service \
-  --cluster enterprise-prod-cluster \
-  --service maintenance-page \
-  --desired-count 1
+# Old Snapshots
+echo "   Snapshots older than 90 days:"
+aws ec2 describe-snapshots \
+  --owner-ids self \
+  --query 'Snapshots[?StartTime<=`'$(date -d "90 days ago" -I)'`].[SnapshotId,StartTime,VolumeSize]' \
+  --output table
 
-# 3. Scale down application (for zero-downtime, skip this)
-# aws ecs update-service --cluster ... --desired-count 0
+# 2. Right-sizing opportunities
+echo "2. Right-sizing Opportunities:"
 
-# 4. Apply Terraform changes
-export AWS_PROFILE=prod
-terraform apply -var-file=terraform.tfvars
+# RDS instances with low CPU
+echo "   RDS instances with low average CPU (<20%):"
+aws rds describe-db-instances --query 'DBInstances[*].DBInstanceIdentifier' --output text | \
+  xargs -I {} sh -c 'CPU=$(aws cloudwatch get-metric-statistics --namespace AWS/RDS --metric-name CPUUtilization --dimensions Name=DBInstanceIdentifier,Value={} --start-time $(date -d "7 days ago" -I) --end-time $(date -I) --period 86400 --statistics Average --query "Datapoints[*].Average" --output text | awk "{sum+=\$1; count++} END {print sum/count}"); echo "{}: ${CPU}%"'
 
-# 5. Verify infrastructure
-./scripts/verify-deployment.sh prod
+# 3. Reserved Instance recommendations
+echo "3. Reserved Instance Recommendations:"
+aws ce get-reservation-purchase-recommendation \
+  --service EC2 \
+  --lookback-period-in-days SIXTY_DAYS \
+  --term-in-years ONE_YEAR \
+  --payment-option NO_UPFRONT
 
-# 6. Scale up application
-aws ecs update-service \
-  --cluster enterprise-prod-cluster \
-  --service app-service \
-  --desired-count 3
-
-# 7. Wait for healthy targets
-aws elbv2 describe-target-health \
-  --target-group-arn <TG_ARN> \
-  --query 'TargetHealthDescriptions[*].[Target.Id,TargetHealth.State]'
-
-# 8. Disable maintenance mode
-aws ecs update-service \
-  --cluster enterprise-prod-cluster \
-  --service maintenance-page \
-  --desired-count 0
-
-# 9. Monitor for 30 minutes
-watch -n 30 './scripts/check-health.sh prod'
-
-# 10. Announce completion
-# Slack: @channel Deployment complete. Monitoring for issues.
-```
-
-**Rollback Procedure:**
-```bash
-# If issues detected within 30 minutes
-
-# 1. Announce rollback
-# Slack: @channel ROLLBACK initiated due to <reason>
-
-# 2. Restore previous Terraform state
-terraform state push state-backup-<timestamp>.json
-
-# 3. Reapply previous configuration
-terraform apply -auto-approve
-
-# 4. Verify rollback
-./scripts/verify-deployment.sh prod
-
-# 5. Document incident
-# Create post-mortem document
+echo "=== Cost Optimization Review Complete ==="
 ```
 
 ## Incident Response
@@ -309,394 +323,562 @@ terraform apply -auto-approve
 
 **P0 - Critical (Production Down)**
 - Response Time: Immediate
-- Notification: Page on-call, notify leadership
-- Example: Complete site outage, data breach
+- Resolution Time: 1 hour
+- Examples: Complete outage, data loss
 
-**P1 - High (Degraded Service)**
+**P1 - High (Major Feature Down)**
 - Response Time: 15 minutes
-- Notification: Alert on-call, notify team
-- Example: High error rates, slow response times
+- Resolution Time: 4 hours
+- Examples: Payment processing down, auth issues
 
-**P2 - Medium (Partial Impact)**
+**P2 - Medium (Performance Degradation)**
 - Response Time: 1 hour
-- Notification: Team Slack channel
-- Example: Single AZ issues, non-critical feature down
+- Resolution Time: 24 hours
+- Examples: Slow response times, intermittent errors
 
-**P3 - Low (Minimal Impact)**
+**P3 - Low (Minor Issues)**
 - Response Time: Next business day
-- Notification: Ticket system
-- Example: Monitoring alerts, non-production issues
+- Resolution Time: 1 week
+- Examples: UI bugs, non-critical features
 
-### P0 Incident Response
+### Incident Response Workflow
 
-**Initial Response (0-5 minutes):**
-```bash
-# 1. Acknowledge incident
-# Update status page: https://status.company.com
-
-# 2. Form incident response team
-# Incident Commander, Technical Lead, Communications Lead
-
-# 3. Create incident channel
-# Slack: #incident-<timestamp>
-
-# 4. Quick assessment
-./scripts/quick-diagnostics.sh prod
+```mermaid
+graph TD
+    A[Incident Detected] --> B[Assess Severity]
+    B --> C{P0/P1?}
+    C -->|Yes| D[Page On-Call]
+    C -->|No| E[Create Ticket]
+    D --> F[Form War Room]
+    F --> G[Investigate]
+    G --> H[Implement Fix]
+    H --> I[Verify Resolution]
+    I --> J[Post-Mortem]
+    E --> K[Triage]
+    K --> L[Assign]
+    L --> M[Fix]
+    M --> J
 ```
 
-**Investigation (5-15 minutes):**
+### P0 Incident Playbook
+
 ```bash
-# Check recent changes
+#!/bin/bash
+# p0-incident-response.sh
+
+echo "=== P0 INCIDENT RESPONSE ==="
+echo "Incident ID: $1"
+echo "Start Time: $(date)"
+echo ""
+
+# 1. Initial Assessment
+echo "## Step 1: Initial Assessment"
+echo "- [ ] Verify incident scope"
+echo "- [ ] Determine affected services"
+echo "- [ ] Notify stakeholders"
+echo ""
+
+# 2. Gather Information
+echo "## Step 2: Gather Information"
+
+# Check CloudWatch Alarms
+echo "### Active Alarms:"
+aws cloudwatch describe-alarms --state-value ALARM
+
+# Check ECS Services
+echo "### ECS Service Status:"
+aws ecs list-services --cluster production-cluster | \
+  jq -r '.serviceArns[]' | \
+  xargs -I {} aws ecs describe-services --cluster production-cluster --services {} | \
+  jq '.services[] | {name: .serviceName, running: .runningCount, desired: .desiredCount, status: .status}'
+
+# Check RDS Status
+echo "### RDS Status:"
+aws rds describe-db-instances \
+  --query 'DBInstances[*].[DBInstanceIdentifier,DBInstanceStatus]' \
+  --output table
+
+# Check Load Balancer Health
+echo "### Load Balancer Target Health:"
+aws elbv2 describe-target-groups --query 'TargetGroups[*].TargetGroupArn' --output text | \
+  xargs -I {} aws elbv2 describe-target-health --target-group-arn {}
+
+# 3. Recent Changes
+echo "### Recent CloudTrail Events:"
 aws cloudtrail lookup-events \
-  --lookup-attributes AttributeKey=EventName,AttributeValue=UpdateService \
-  --start-time $(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%S) \
-  --max-results 50
+  --start-time $(date -d "1 hour ago" -I) \
+  --max-results 20 \
+  --query 'Events[*].[EventTime,EventName,Username]' \
+  --output table
 
-# Check application logs
-aws logs tail /aws/application/enterprise-prod --follow --since 1h
+# 4. Create incident channel
+echo ""
+echo "## Step 3: Communication"
+echo "Create Slack channel: #incident-$1"
+echo "Start incident timeline document"
 
-# Check system metrics
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/ApplicationELB \
-  --metric-name HTTPCode_Target_5XX_Count \
-  --dimensions Name=LoadBalancer,Value=... \
-  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 60 \
-  --statistics Sum
+# 5. Rollback if needed
+echo ""
+echo "## Step 4: Mitigation Options"
+echo "- [ ] Rollback recent deployment"
+echo "- [ ] Scale up resources"
+echo "- [ ] Failover to DR region"
+echo "- [ ] Enable maintenance mode"
+
+echo ""
+echo "=== Waiting for incident resolution ==="
 ```
 
-**Resolution Actions:**
-```bash
-# Common fixes based on issue type:
+### Rollback Procedures
 
-# 1. Application Crash Loop
+```bash
+# Rollback ECS service to previous task definition
 aws ecs update-service \
-  --cluster enterprise-prod-cluster \
-  --service app-service \
-  --force-new-deployment
+  --cluster production-cluster \
+  --service web-service \
+  --task-definition web-service:$(( $(aws ecs describe-services --cluster production-cluster --services web-service --query 'services[0].taskDefinition' --output text | cut -d: -f7) - 1 ))
 
-# 2. Database Connection Issues
-# Check security groups
-aws ec2 describe-security-groups --group-ids <RDS_SG_ID>
-# Verify RDS status
-aws rds describe-db-instances --db-instance-identifier enterprise-prod-db
+# Rollback RDS to snapshot
+aws rds restore-db-instance-from-db-snapshot \
+  --db-instance-identifier production-db-restored \
+  --db-snapshot-identifier manual-backup-20250101
 
-# 3. High CPU/Memory
-# Scale up ECS service
+# Rollback Lambda function
+aws lambda update-function-code \
+  --function-name my-function \
+  --s3-bucket my-deployment-bucket \
+  --s3-key my-function-previous-version.zip
+```
+
+## Deployment Procedures
+
+### Pre-Deployment Checklist
+
+```bash
+#!/bin/bash
+# pre-deployment-checklist.sh
+
+ENVIRONMENT=$1
+
+echo "=== Pre-Deployment Checklist for $ENVIRONMENT ==="
+echo ""
+
+# 1. Verify Terraform state is clean
+echo "[ ] 1. Terraform State Health"
+cd layers/networking/environments/$ENVIRONMENT
+terraform state list > /dev/null 2>&1 && echo "✓ State accessible" || echo "✗ State issue"
+
+# 2. Check for drift
+echo "[ ] 2. Configuration Drift Check"
+terraform plan -detailed-exitcode > /dev/null 2>&1
+case $? in
+  0) echo "✓ No drift detected" ;;
+  1) echo "✗ Terraform error" ;;
+  2) echo "⚠ Drift detected - review plan" ;;
+esac
+
+# 3. Verify backups
+echo "[ ] 3. Recent Backups"
+aws rds describe-db-snapshots \
+  --snapshot-type automated \
+  --query 'DBSnapshots[?SnapshotCreateTime>=`'$(date -d "24 hours ago" -I)'`].[DBSnapshotIdentifier]' \
+  --output text && echo "✓ Recent RDS backup found" || echo "✗ No recent backup"
+
+# 4. Check service health
+echo "[ ] 4. Current Service Health"
+aws ecs describe-services --cluster $ENVIRONMENT-cluster --services web-service \
+  --query 'services[0].runningCount==services[0].desiredCount' \
+  --output text | grep -q "True" && echo "✓ Services healthy" || echo "✗ Services unhealthy"
+
+# 5. Review change window
+echo "[ ] 5. Deployment Window"
+HOUR=$(date +%H)
+if [ $HOUR -ge 2 ] && [ $HOUR -le 5 ]; then
+  echo "✓ In maintenance window (02:00-05:00)"
+else
+  echo "⚠ Outside maintenance window"
+fi
+
+# 6. Notify stakeholders
+echo "[ ] 6. Stakeholder Notification"
+echo "   Send notification to #deployments channel"
+
+echo ""
+echo "=== Checklist Complete ==="
+echo "Proceed with deployment? (yes/no)"
+```
+
+### Blue-Green Deployment
+
+```bash
+#!/bin/bash
+# blue-green-deployment.sh
+
+SERVICE_NAME="web-service"
+CLUSTER="production-cluster"
+NEW_TASK_DEF="web-service:42"  # New version
+
+echo "=== Blue-Green Deployment ==="
+
+# 1. Create new target group (Green)
+GREEN_TG=$(aws elbv2 create-target-group \
+  --name ${SERVICE_NAME}-green \
+  --protocol HTTP \
+  --port 80 \
+  --vpc-id vpc-xxx \
+  --health-check-path /health \
+  --query 'TargetGroups[0].TargetGroupArn' \
+  --output text)
+
+# 2. Deploy new version to green
+aws ecs create-service \
+  --cluster $CLUSTER \
+  --service-name ${SERVICE_NAME}-green \
+  --task-definition $NEW_TASK_DEF \
+  --desired-count 2 \
+  --load-balancers targetGroupArn=$GREEN_TG,containerName=web,containerPort=80
+
+# 3. Wait for healthy targets
+echo "Waiting for green deployment to be healthy..."
+while true; do
+  HEALTHY=$(aws elbv2 describe-target-health --target-group-arn $GREEN_TG \
+    --query 'length(TargetHealthDescriptions[?TargetHealth.State==`healthy`])' \
+    --output text)
+  if [ "$HEALTHY" -ge 2 ]; then
+    echo "Green deployment healthy!"
+    break
+  fi
+  sleep 10
+done
+
+# 4. Switch traffic (modify ALB listener rule)
+echo "Switching traffic to green..."
+aws elbv2 modify-rule \
+  --rule-arn arn:aws:elasticloadbalancing:... \
+  --actions Type=forward,TargetGroupArn=$GREEN_TG
+
+# 5. Monitor for 15 minutes
+echo "Monitoring new deployment for 15 minutes..."
+sleep 900
+
+# 6. If successful, delete blue
+echo "Deployment successful. Cleaning up blue environment..."
 aws ecs update-service \
-  --cluster enterprise-prod-cluster \
-  --service app-service \
-  --desired-count 6
+  --cluster $CLUSTER \
+  --service ${SERVICE_NAME}-blue \
+  --desired-count 0
 
-# 4. Load Balancer Issues
-# Check target health
-aws elbv2 describe-target-health --target-group-arn <TG_ARN>
-```
-
-**Post-Incident (After Resolution):**
-```bash
-# 1. Update status page
-# Mark incident as resolved
-
-# 2. Document timeline
-# Create incident report in wiki
-
-# 3. Schedule post-mortem
-# Within 48 hours, all incident team members
-
-# 4. Implement preventive measures
-# Create tickets for improvements
-```
-
-## Maintenance Procedures
-
-### RDS Maintenance
-
-**Minor Version Upgrade:**
-```bash
-# 1. Schedule maintenance window
-aws rds modify-db-instance \
-  --db-instance-identifier enterprise-prod-db \
-  --preferred-maintenance-window sun:04:00-sun:05:00 \
-  --apply-immediately false
-
-# 2. Create snapshot before upgrade
-aws rds create-db-snapshot \
-  --db-instance-identifier enterprise-prod-db \
-  --db-snapshot-identifier pre-upgrade-$(date +%Y%m%d)
-
-# 3. Apply upgrade (during maintenance window)
-aws rds modify-db-instance \
-  --db-instance-identifier enterprise-prod-db \
-  --engine-version 15.5 \
-  --apply-immediately true
-
-# 4. Monitor upgrade
-watch -n 30 'aws rds describe-db-instances \
-  --db-instance-identifier enterprise-prod-db \
-  --query "DBInstances[0].[DBInstanceStatus,EngineVersion]"'
-
-# 5. Verify post-upgrade
-psql -h <RDS_ENDPOINT> -U admin -d dbname -c "SELECT version();"
-```
-
-### Certificate Renewal
-
-**ACM Certificate:**
-```bash
-# 1. Request new certificate
-aws acm request-certificate \
-  --domain-name example.com \
-  --subject-alternative-names *.example.com \
-  --validation-method DNS
-
-# 2. Add validation DNS records to Route53
-# (ACM provides DNS records to add)
-
-# 3. Wait for validation
-aws acm describe-certificate \
-  --certificate-arn <CERT_ARN> \
-  --query 'Certificate.Status'
-
-# 4. Update load balancer listener
-aws elbv2 modify-listener \
-  --listener-arn <LISTENER_ARN> \
-  --certificates CertificateArn=<NEW_CERT_ARN>
-
-# 5. Verify HTTPS
-curl -I https://example.com
-```
-
-### ECS Task Definition Update
-
-**Zero-Downtime Update:**
-```bash
-# 1. Register new task definition
-aws ecs register-task-definition \
-  --cli-input-json file://task-definition.json
-
-# 2. Update service with new task definition
-aws ecs update-service \
-  --cluster enterprise-prod-cluster \
-  --service app-service \
-  --task-definition app-task:5 \
-  --deployment-configuration \
-    "maximumPercent=200,minimumHealthyPercent=100"
-
-# 3. Monitor deployment
-aws ecs describe-services \
-  --cluster enterprise-prod-cluster \
-  --services app-service \
-  --query 'services[0].deployments[*].[status,desiredCount,runningCount]'
-
-# 4. Wait for deployment completion
-aws ecs wait services-stable \
-  --cluster enterprise-prod-cluster \
-  --services app-service
+echo "=== Deployment Complete ==="
 ```
 
 ## Backup and Recovery
 
 ### Database Backup
 
-**Manual Backup:**
 ```bash
-# 1. Create RDS snapshot
+# Create manual RDS snapshot
 aws rds create-db-snapshot \
-  --db-instance-identifier enterprise-prod-db \
-  --db-snapshot-identifier manual-$(date +%Y%m%d%H%M)
+  --db-instance-identifier production-db \
+  --db-snapshot-identifier prod-manual-$(date +%Y%m%d-%H%M%S) \
+  --tags Key=Type,Value=Manual Key=CreatedBy,Value=$(whoami)
 
-# 2. Wait for snapshot completion
-aws rds wait db-snapshot-completed \
-  --db-snapshot-identifier manual-$(date +%Y%m%d%H%M)
-
-# 3. Export snapshot to S3 (for long-term storage)
+# Export to S3
 aws rds start-export-task \
-  --export-task-identifier export-$(date +%Y%m%d) \
-  --source-arn arn:aws:rds:region:account:snapshot:manual-$(date +%Y%m%d%H%M) \
-  --s3-bucket-name enterprise-prod-backups \
-  --iam-role-arn arn:aws:iam::account:role/RDSExportRole
+  --export-task-identifier prod-export-$(date +%Y%m%d) \
+  --source-arn arn:aws:rds:us-east-1:123456789:snapshot:prod-manual-xxx \
+  --s3-bucket-name production-db-exports \
+  --iam-role-arn arn:aws:iam::123456789:role/rds-export-role \
+  --kms-key-id arn:aws:kms:us-east-1:123456789:key/xxx
 ```
 
-**Database Restore:**
-```bash
-# 1. List available snapshots
-aws rds describe-db-snapshots \
-  --db-instance-identifier enterprise-prod-db \
-  --query 'DBSnapshots[*].[DBSnapshotIdentifier,SnapshotCreateTime]' \
-  --output table
+### Disaster Recovery Test
 
-# 2. Restore from snapshot
-aws rds restore-db-instance-from-db-snapshot \
-  --db-instance-identifier enterprise-prod-db-restored \
-  --db-snapshot-identifier manual-20250101 \
-  --db-subnet-group-name enterprise-prod-db-subnet-group \
-  --vpc-security-group-ids sg-xxxxx
-
-# 3. Wait for restore completion
-aws rds wait db-instance-available \
-  --db-instance-identifier enterprise-prod-db-restored
-
-# 4. Update application connection string
-# Or restore to original instance after verification
-```
-
-### Infrastructure State Backup
-
-**Automated Backup Script:**
 ```bash
 #!/bin/bash
-# Save to scripts/backup-terraform-state.sh
+# dr-test.sh
 
-ENVIRONMENTS="dev qa uat prod"
-LAYERS="networking security dns database storage compute monitoring"
-BACKUP_BUCKET="terraform-state-backups"
+echo "=== Disaster Recovery Test ==="
+echo "Test Date: $(date)"
+echo ""
 
-for env in $ENVIRONMENTS; do
-  for layer in $LAYERS; do
-    echo "Backing up $env - $layer"
-    
-    # Pull current state
-    cd layers/$layer/environments/$env
-    terraform state pull > state.json
-    
-    # Upload to S3 with timestamp
-    aws s3 cp state.json \
-      s3://$BACKUP_BUCKET/$env/$layer/state-$(date +%Y%m%d%H%M).json
-    
-    rm state.json
-    cd -
-  done
-done
+# 1. Create test VPC
+echo "1. Creating test VPC..."
+terraform -chdir=layers/networking/environments/dr-test apply -auto-approve
+
+# 2. Restore RDS from snapshot
+echo "2. Restoring database..."
+LATEST_SNAPSHOT=$(aws rds describe-db-snapshots \
+  --db-instance-identifier production-db \
+  --snapshot-type automated \
+  --query 'DBSnapshots | sort_by(@, &SnapshotCreateTime) | [-1].DBSnapshotIdentifier' \
+  --output text)
+
+aws rds restore-db-instance-from-db-snapshot \
+  --db-instance-identifier dr-test-db \
+  --db-snapshot-identifier $LATEST_SNAPSHOT
+
+# 3. Deploy application
+echo "3. Deploying application..."
+terraform -chdir=layers/compute/environments/dr-test apply -auto-approve
+
+# 4. Verify functionality
+echo "4. Running verification tests..."
+# Add your verification tests here
+
+# 5. Cleanup
+echo "5. Cleaning up test environment..."
+terraform -chdir=layers/compute/environments/dr-test destroy -auto-approve
+terraform -chdir=layers/networking/environments/dr-test destroy -auto-approve
+
+echo "=== DR Test Complete ==="
 ```
 
 ## Scaling Operations
 
-### Scale ECS Service
+### Manual Scaling
 
-**Manual Scaling:**
 ```bash
-# Scale up
+# Scale ECS service
 aws ecs update-service \
-  --cluster enterprise-prod-cluster \
-  --service app-service \
-  --desired-count 6
+  --cluster production-cluster \
+  --service web-service \
+  --desired-count 10
 
-# Scale down
-aws ecs update-service \
-  --cluster enterprise-prod-cluster \
-  --service app-service \
-  --desired-count 2
-```
-
-**Auto Scaling Setup:**
-```bash
-# Register scalable target
-aws application-autoscaling register-scalable-target \
-  --service-namespace ecs \
-  --resource-id service/enterprise-prod-cluster/app-service \
-  --scalable-dimension ecs:service:DesiredCount \
-  --min-capacity 2 \
-  --max-capacity 10
-
-# Create scaling policy
-aws application-autoscaling put-scaling-policy \
-  --service-namespace ecs \
-  --resource-id service/enterprise-prod-cluster/app-service \
-  --scalable-dimension ecs:service:DesiredCount \
-  --policy-name cpu-scaling-policy \
-  --policy-type TargetTrackingScaling \
-  --target-tracking-scaling-policy-configuration file://scaling-policy.json
-```
-
-### Scale RDS Instance
-
-```bash
-# 1. Create snapshot before scaling
-aws rds create-db-snapshot \
-  --db-instance-identifier enterprise-prod-db \
-  --db-snapshot-identifier pre-scale-$(date +%Y%m%d)
-
-# 2. Modify instance class
+# Scale RDS (requires downtime)
 aws rds modify-db-instance \
-  --db-instance-identifier enterprise-prod-db \
+  --db-instance-identifier production-db \
   --db-instance-class db.r5.xlarge \
-  --apply-immediately true
+  --apply-immediately
 
-# 3. Monitor modification
-watch -n 30 'aws rds describe-db-instances \
-  --db-instance-identifier enterprise-prod-db \
-  --query "DBInstances[0].[DBInstanceStatus,DBInstanceClass]"'
+# Scale EC2 Auto Scaling Group
+aws autoscaling set-desired-capacity \
+  --auto-scaling-group-name production-asg \
+  --desired-capacity 5
 ```
 
-## Security Operations
+### Auto-Scaling Configuration
 
-### Rotate Access Keys
+```terraform
+# ECS Service Auto Scaling
+resource "aws_appautoscaling_target" "ecs" {
+  max_capacity       = 10
+  min_capacity       = 2
+  resource_id        = "service/production-cluster/web-service"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "ecs_cpu" {
+  name               = "cpu-autoscaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value = 70.0
+  }
+}
+```
+
+## Monitoring and Alerting
+
+### Critical Alerts Setup
 
 ```bash
-# 1. Create new access key
-aws iam create-access-key --user-name service-user
+# High CPU Alert
+aws cloudwatch put-metric-alarm \
+  --alarm-name prod-rds-high-cpu \
+  --alarm-description "RDS CPU > 80%" \
+  --metric-name CPUUtilization \
+  --namespace AWS/RDS \
+  --statistic Average \
+  --period 300 \
+  --evaluation-periods 2 \
+  --threshold 80 \
+  --comparison-operator GreaterThanThreshold \
+  --dimensions Name=DBInstanceIdentifier,Value=production-db \
+  --alarm-actions arn:aws:sns:us-east-1:123456789:critical-alerts
 
-# 2. Update applications with new keys
-# Deploy new keys via AWS Secrets Manager
+# Low Disk Space Alert  
+aws cloudwatch put-metric-alarm \
+  --alarm-name prod-rds-low-disk \
+  --alarm-description "RDS Free Storage < 10GB" \
+  --metric-name FreeStorageSpace \
+  --namespace AWS/RDS \
+  --statistic Average \
+  --period 300 \
+  --evaluation-periods 1 \
+  --threshold 10737418240 \
+  --comparison-operator LessThanThreshold \
+  --dimensions Name=DBInstanceIdentifier,Value=production-db \
+  --alarm-actions arn:aws:sns:us-east-1:123456789:critical-alerts
 
-# 3. Test applications
-curl -I https://api.example.com/health
-
-# 4. Delete old access key
-aws iam delete-access-key \
-  --user-name service-user \
-  --access-key-id AKIA...OLD...KEY
+# Unhealthy Targets Alert
+aws cloudwatch put-metric-alarm \
+  --alarm-name prod-alb-unhealthy-targets \
+  --alarm-description "ALB has unhealthy targets" \
+  --metric-name UnHealthyHostCount \
+  --namespace AWS/ApplicationELB \
+  --statistic Average \
+  --period 60 \
+  --evaluation-periods 2 \
+  --threshold 1 \
+  --comparison-operator GreaterThanOrEqualToThreshold \
+  --dimensions Name=LoadBalancer,Value=app/production-alb/xxx \
+  --alarm-actions arn:aws:sns:us-east-1:123456789:critical-alerts
 ```
 
-### Security Audit
+### Dashboard Creation
 
-**Monthly Security Review:**
 ```bash
-# 1. Check for unused IAM users
-aws iam list-users --query 'Users[?PasswordLastUsed<`2024-01-01`]'
+# Create CloudWatch Dashboard
+aws cloudwatch put-dashboard \
+  --dashboard-name Production-Overview \
+  --dashboard-body file://dashboard-config.json
 
-# 2. Review security groups
-aws ec2 describe-security-groups \
-  --filters "Name=ip-permission.cidr,Values=0.0.0.0/0" \
-  --query 'SecurityGroups[*].[GroupId,GroupName]'
-
-# 3. Check S3 bucket policies
-aws s3api list-buckets --query 'Buckets[*].Name' --output text | \
-while read bucket; do
-  echo "Bucket: $bucket"
-  aws s3api get-bucket-acl --bucket $bucket
-done
-
-# 4. Review CloudTrail logs
-aws cloudtrail lookup-events \
-  --lookup-attributes AttributeKey=EventName,AttributeValue=DeleteBucket \
-  --start-time $(date -u -d '30 days ago' +%Y-%m-%dT%H:%M:%S)
+# dashboard-config.json
+cat > dashboard-config.json << 'EOF'
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "properties": {
+        "metrics": [
+          ["AWS/RDS", "CPUUtilization", {"stat": "Average"}],
+          ["AWS/RDS", "DatabaseConnections", {"stat": "Average"}]
+        ],
+        "period": 300,
+        "stat": "Average",
+        "region": "us-east-1",
+        "title": "RDS Metrics"
+      }
+    },
+    {
+      "type": "metric",
+      "properties": {
+        "metrics": [
+          ["AWS/ECS", "CPUUtilization", {"stat": "Average"}],
+          ["AWS/ECS", "MemoryUtilization", {"stat": "Average"}]
+        ],
+        "period": 300,
+        "stat": "Average",
+        "region": "us-east-1",
+        "title": "ECS Metrics"
+      }
+    }
+  ]
+}
+EOF
 ```
+
+## On-Call Procedures
+
+### On-Call Rotation Schedule
+
+- **Primary On-Call**: Available 24/7 for P0/P1 incidents
+- **Secondary On-Call**: Backup for primary
+- **Rotation**: Weekly, Monday 9:00 AM
+
+### Handoff Checklist
+
+```markdown
+# On-Call Handoff - Week of [DATE]
+
+## Ongoing Issues
+- [ ] Issue #123: Intermittent latency spikes
+- [ ] Issue #456: Pending infrastructure upgrade
+
+## Recent Changes
+- [ ] Deployed v2.3.4 to production on [DATE]
+- [ ] Scaled ECS service from 5 to 8 tasks
+
+## Upcoming Maintenance
+- [ ] RDS maintenance window: Sunday 3:00-5:00 AM
+- [ ] Certificate renewal: [DATE]
+
+## Important Notes
+- [ ] Customer X has increased load expected this week
+- [ ] Budget alerts enabled for development environment
 
 ## Contact Information
+- Team Slack: #platform-engineering
+- PagerDuty: [LINK]
+- Escalation: [MANAGER NAME/CONTACT]
 
-**On-Call Schedule:**
-- Check PagerDuty for current on-call engineer
-- Escalation: +1-555-0100
+## Useful Links
+- Runbook: [URL]
+- Monitoring Dashboard: [URL]
+- Recent Incidents: [URL]
+```
 
-**Team Contacts:**
-- Platform Team: platform-team@company.com
-- Security Team: security@company.com
-- DevOps Lead: devops-lead@company.com
+## Contacts and Escalation
 
-**External Support:**
-- AWS Support: https://console.aws.amazon.com/support/
-- Emergency: +1-206-266-4064
+### Primary Contacts
 
-## Document Updates
+```yaml
+roles:
+  platform_team_lead:
+    name: "John Doe"
+    email: "john.doe@company.com"
+    phone: "+1-555-0100"
+    slack: "@johndoe"
+    
+  devops_engineer:
+    name: "Jane Smith"
+    email: "jane.smith@company.com"
+    phone: "+1-555-0101"
+    slack: "@janesmith"
+    
+  sre_lead:
+    name: "Bob Johnson"
+    email: "bob.johnson@company.com"
+    phone: "+1-555-0102"
+    slack: "@bobjohnson"
 
-This runbook should be reviewed and updated:
-- After each major incident
-- Quarterly for accuracy
-- When procedures change
-- When new services are added
+external:
+  aws_support:
+    phone: "1-800-AWS-SUPPORT"
+    portal: "https://console.aws.amazon.com/support"
+    
+  pagerduty:
+    email: "team@company.pagerduty.com"
+    phone: "+1-555-PAGER"
+```
 
-Last Updated: 2025-01-05
-Version: 1.0
+### Escalation Matrix
+
+```
+Level 1: On-Call Engineer (0-30 min)
+├─ P0: Immediate escalation to Level 2
+└─ P1: Attempt resolution, escalate if needed
+
+Level 2: Team Lead (30-60 min)
+├─ Coordinate resources
+├─ Communicate with stakeholders
+└─ Escalate to Level 3 if needed
+
+Level 3: Engineering Manager (60+ min)
+├─ Executive communication
+├─ Business impact assessment
+└─ Resource allocation decisions
+
+Level 4: VP Engineering (Critical business impact)
+└─ Strategic decisions and external communication
+```
+
+## Additional Resources
+
+- [AWS Well-Architected Tool](https://aws.amazon.com/well-architected-tool/)
+- [Terraform Best Practices](https://www.terraform-best-practices.com/)
+- [Internal Wiki](https://wiki.company.com)
+- [Incident Response Plan](https://wiki.company.com/incident-response)
+
+---
+
+**Last Updated**: 2025-10-05  
+**Document Owner**: Platform Engineering Team  
+**Review Frequency**: Monthly

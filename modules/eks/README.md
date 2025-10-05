@@ -1,56 +1,37 @@
-# Eks Module
+# EKS Cluster Module
 
-## Description
+Amazon EKS (Elastic Kubernetes Service) cluster with managed node groups.
 
-EKS Cluster configuration
-
-## Resources Created
-
-- `aws_eks_cluster`
-- `aws_eks_node_group`
-- `aws_eks_addon`
+## Features
+- EKS Control Plane
+- Managed Node Groups
+- IRSA (IAM Roles for Service Accounts)
+- Cluster autoscaling
+- Add-ons support (VPC CNI, CoreDNS, kube-proxy)
 
 ## Usage
 
 ```hcl
 module "eks" {
-  source = "./modules/eks"
+  source = "../../../modules/eks"
 
-  environment = "production"
-  name        = "my-eks"
-
+  cluster_name    = "production-eks"
+  cluster_version = "1.28"
+  
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.private_subnet_ids
+  
+  node_groups = {
+    general = {
+      desired_size   = 3
+      min_size       = 2
+      max_size       = 10
+      instance_types = ["t3.large"]
+    }
+  }
+  
   tags = {
     Environment = "production"
-    Project     = "my-project"
   }
 }
 ```
-
-## Inputs
-
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| environment | Environment name | `string` | n/a | yes |
-| name | Resource name | `string` | n/a | yes |
-| tags | Additional tags | `map(string)` | `{}` | no |
-
-## Outputs
-
-| Name | Description |
-|------|-------------|
-| id | Resource ID |
-| arn | Resource ARN |
-
-## Well-Architected Framework
-
-This module implements AWS Well-Architected Framework best practices:
-
-- **Operational Excellence**: Infrastructure as Code, automated deployments
-- **Security**: Encryption at rest and in transit, least privilege access
-- **Reliability**: Multi-AZ deployments, automated backups
-- **Performance Efficiency**: Right-sizing, auto-scaling
-- **Cost Optimization**: Resource tagging, lifecycle policies
-
-## Examples
-
-See the [examples](./examples) directory for complete usage examples.
