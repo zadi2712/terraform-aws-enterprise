@@ -6,16 +6,18 @@ This repository contains a production-ready, enterprise-grade Terraform infrastr
 
 ## 📋 Table of Contents
 
-- [Architecture Overview](#architecture-overview)
-- [Directory Structure](#directory-structure)
-- [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
-- [Layer-by-Layer Guide](#layer-by-layer-guide)
-- [Environment Management](#environment-management)
-- [Module Documentation](#module-documentation)
-- [Best Practices](#best-practices)
-- [Security Considerations](#security-considerations)
-- [Contributing](#contributing)
+- [Architecture Overview](#️-architecture-overview)
+- [Well-Architected Framework Alignment](#-well-architected-framework-alignment)
+- [Directory Structure](#-directory-structure)
+- [Quick Start](#-quick-start)
+- [Layer-by-Layer Guide](#-layer-by-layer-guide)
+- [Environment Management](#-environment-management)
+- [Best Practices Implemented](#-best-practices-implemented)
+- [Security Considerations](#-security-considerations)
+- [Monitoring and Alerting](#-monitoring-and-alerting)
+- [Contributing](#-contributing)
+- [Additional Documentation](#-additional-documentation)
+- [Support](#-support)
 
 ## 🎯 Well-Architected Framework Alignment
 
