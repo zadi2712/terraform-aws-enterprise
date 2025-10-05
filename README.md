@@ -384,3 +384,88 @@ Example: ec2-prod-webapp-instance-01
 ```
 
 ## 🔒 Security Considerations
+
+### Data Protection
+- All S3 buckets have encryption enabled
+- RDS encryption with KMS
+- EBS volumes encrypted
+- SSL/TLS for data in transit
+
+### Access Control
+- IAM roles instead of users
+- MFA enforcement
+- Regular access reviews
+- Service Control Policies (SCPs)
+
+### Network Security
+- Private subnets for databases and apps
+- Public subnets only for load balancers
+- Security groups with specific rules
+- NACLs as second layer of defense
+- VPC Flow Logs enabled
+
+### Compliance
+- CloudTrail for audit logging
+- Config rules for compliance checks
+- GuardDuty for threat detection
+- Security Hub for centralized security
+
+## 📊 Monitoring and Alerting
+
+### CloudWatch Dashboards
+- Infrastructure health
+- Application metrics
+- Cost and usage
+- Security events
+
+### Alarm Thresholds
+- CPU > 80%
+- Memory > 85%
+- Disk > 90%
+- Error rate > 1%
+- Response time > 500ms
+
+## 🤝 Contributing
+
+### Pre-commit Hooks
+```bash
+# Install pre-commit
+pip install pre-commit
+
+# Install hooks
+pre-commit install
+
+# Run manually
+pre-commit run --all-files
+```
+
+### Code Review Checklist
+- [ ] Module documentation updated
+- [ ] Variables have descriptions
+- [ ] Outputs are properly defined
+- [ ] Tags are consistent
+- [ ] Security best practices followed
+- [ ] Tested in dev environment
+- [ ] State management configured
+- [ ] No sensitive data in code
+
+## 📖 Additional Documentation
+
+See the `docs/` directory for detailed documentation:
+- **ARCHITECTURE.md** - Design decisions and patterns
+- **DEPLOYMENT.md** - Step-by-step deployment guide
+- **TROUBLESHOOTING.md** - Common issues and resolutions
+- **SECURITY.md** - Security best practices and requirements
+- **RUNBOOK.md** - Operational procedures
+
+## 📞 Support
+
+For issues or questions:
+1. Check the troubleshooting guide
+2. Review existing issues
+3. Contact the Platform Engineering team
+4. Create a new issue with details
+
+## 📝 License
+
+This project is proprietary and confidential.
