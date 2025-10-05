@@ -1,5 +1,5 @@
 ################################################################################
-# Networking Layer - Version Constraints
+# Networking Layer - Provider Versions
 ################################################################################
 
 terraform {
@@ -9,10 +9,6 @@ terraform {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.5"
     }
   }
 }

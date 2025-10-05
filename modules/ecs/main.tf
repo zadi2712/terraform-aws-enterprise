@@ -1,17 +1,29 @@
 ################################################################################
-# ECS Module - Main Configuration
-# Description: ECS Cluster and Services
+# ECS Module - Container Orchestration
 ################################################################################
 
-locals {
-  common_tags = merge(
-    var.tags,
-    {
-      Module    = "ecs"
-      ManagedBy = "terraform"
-    }
-  )
+resource "aws_ecs_cluster" "this" {
+  name = var.cluster_name
+
+  setting {
+    name  = "containerInsights"
+    value = var.container_insights_enabled ? "enabled" : "disabled"
+  }
+
+  tags = merge(var.tags, { Name = var.cluster_name })
 }
 
-# Add your resource configurations here
-# Resources: aws_ecs_cluster, aws_ecs_service, aws_ecs_task_definition
+resource "aws_ecs_cluster_capacity_providers" "this" {
+  cluster_name = aws_ecs_cluster.this.name
+
+  capacity_providers = var.capacity_providers
+
+  dynamic "default_capacity_provider_strategy" {
+    for_each = var.default_capacity_provider_strategy
+    content {
+      capacity_provider = default_capacity_provider_strategy.value.capacity_provider
+      weight            = default_capacity_provider_strategy.value.weight
+      base              = lookup(default_capacity_provider_strategy.value, "base", null)
+    }
+  }
+}

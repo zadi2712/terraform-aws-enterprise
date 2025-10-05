@@ -1,13 +1,9 @@
-################################################################################
-# S3 Module - Outputs
-################################################################################
-
-output "id" {
-  description = "Resource ID"
-  value       = "placeholder"
+output "bucket_id" {
+  description = "Bucket ID"
+  value       = aws_s3_bucket.this.id
 }
 
-output "arn" {
-  description = "Resource ARN"
-  value       = "placeholder"
+output "bucket_arn" {
+  description = "Bucket ARN"
+  value       = aws_s3_bucket.this.arn
 }

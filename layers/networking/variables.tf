@@ -1,5 +1,5 @@
 ################################################################################
-# Networking Layer - Variables
+# Networking Layer - Variable Definitions
 ################################################################################
 
 variable "environment" {
@@ -8,20 +8,24 @@ variable "environment" {
 
   validation {
     condition     = contains(["dev", "qa", "uat", "prod"], var.environment)
-    error_message = "Environment must be one of: dev, qa, uat, prod."
+    error_message = "Environment must be dev, qa, uat, or prod."
   }
 }
 
 variable "aws_region" {
-  description = "AWS region for resources"
+  description = "AWS region where resources will be created"
   type        = string
   default     = "us-east-1"
 }
 
 variable "project_name" {
-  description = "Project name for resource naming"
+  description = "Project name used for resource naming"
   type        = string
 }
+
+################################################################################
+# VPC Configuration
+################################################################################
 
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
@@ -39,9 +43,13 @@ variable "availability_zones" {
 
   validation {
     condition     = length(var.availability_zones) >= 2
-    error_message = "At least 2 availability zones required for high availability."
+    error_message = "At least 2 availability zones are required for high availability."
   }
 }
+
+################################################################################
+# Subnet Configuration
+################################################################################
 
 variable "public_subnet_cidrs" {
   description = "CIDR blocks for public subnets"
@@ -58,6 +66,10 @@ variable "database_subnet_cidrs" {
   type        = list(string)
 }
 
+################################################################################
+# NAT Gateway Configuration
+################################################################################
+
 variable "enable_nat_gateway" {
   description = "Enable NAT Gateway for private subnets"
   type        = bool
@@ -65,16 +77,20 @@ variable "enable_nat_gateway" {
 }
 
 variable "single_nat_gateway" {
-  description = "Use single NAT Gateway (cost optimization for non-prod)"
+  description = "Use a single NAT Gateway for all private subnets (cost optimization)"
   type        = bool
   default     = false
 }
 
 variable "one_nat_gateway_per_az" {
-  description = "Create one NAT Gateway per AZ (high availability)"
+  description = "Create one NAT Gateway per availability zone"
   type        = bool
   default     = true
 }
+
+################################################################################
+# VPC Features
+################################################################################
 
 variable "enable_flow_logs" {
   description = "Enable VPC Flow Logs"
@@ -83,7 +99,7 @@ variable "enable_flow_logs" {
 }
 
 variable "flow_logs_retention_days" {
-  description = "VPC Flow Logs retention period in days"
+  description = "Number of days to retain VPC Flow Logs"
   type        = number
   default     = 30
 
@@ -98,6 +114,10 @@ variable "enable_vpc_endpoints" {
   type        = bool
   default     = true
 }
+
+################################################################################
+# Tags
+################################################################################
 
 variable "common_tags" {
   description = "Common tags to apply to all resources"

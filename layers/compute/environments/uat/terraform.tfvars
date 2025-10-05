@@ -1,11 +1,19 @@
 ################################################################################
-# Compute Layer - UAT Environment Configuration
+# COMPUTE Layer - UAT Environment Configuration
 ################################################################################
 
 # General Configuration
 environment  = "uat"
 aws_region   = "us-east-1"
 project_name = "enterprise"
+
+# Instance Sizing
+instance_type     = "t3.large"
+rds_instance_type = "db.r5.large"
+enable_multi_az   = true
+
+# Backup Configuration
+backup_retention_days = 30
 
 # Common Tags
 common_tags = {
@@ -15,5 +23,4 @@ common_tags = {
   Layer       = "compute"
   CostCenter  = "engineering"
   Owner       = "platform-team"
-  Compliance  = "pci-dss"
 }

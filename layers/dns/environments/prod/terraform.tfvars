@@ -1,11 +1,19 @@
 ################################################################################
-# Dns Layer - PROD Environment Configuration
+# DNS Layer - PROD Environment Configuration
 ################################################################################
 
 # General Configuration
 environment  = "prod"
 aws_region   = "us-east-1"
 project_name = "enterprise"
+
+# Instance Sizing
+instance_type     = "t3.xlarge"
+rds_instance_type = "db.r5.xlarge"
+enable_multi_az   = true
+
+# Backup Configuration
+backup_retention_days = 90
 
 # Common Tags
 common_tags = {
@@ -15,5 +23,4 @@ common_tags = {
   Layer       = "dns"
   CostCenter  = "engineering"
   Owner       = "platform-team"
-  Compliance  = "pci-dss"
 }

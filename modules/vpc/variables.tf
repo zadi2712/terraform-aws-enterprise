@@ -30,6 +30,7 @@ variable "private_subnet_cidrs" {
 variable "database_subnet_cidrs" {
   description = "CIDR blocks for database subnets"
   type        = list(string)
+  default     = []
 }
 
 variable "enable_dns_hostnames" {
@@ -62,6 +63,18 @@ variable "one_nat_gateway_per_az" {
   default     = true
 }
 
+variable "enable_s3_endpoint" {
+  description = "Enable S3 VPC endpoint"
+  type        = bool
+  default     = true
+}
+
+variable "enable_dynamodb_endpoint" {
+  description = "Enable DynamoDB VPC endpoint"
+  type        = bool
+  default     = true
+}
+
 variable "enable_flow_logs" {
   description = "Enable VPC Flow Logs"
   type        = bool
@@ -69,7 +82,7 @@ variable "enable_flow_logs" {
 }
 
 variable "flow_logs_retention_in_days" {
-  description = "Flow logs retention period"
+  description = "Retention period for VPC Flow Logs"
   type        = number
   default     = 30
 }
@@ -82,18 +95,6 @@ variable "create_flow_logs_cloudwatch_log_group" {
 
 variable "create_flow_logs_cloudwatch_iam_role" {
   description = "Create IAM role for Flow Logs"
-  type        = bool
-  default     = true
-}
-
-variable "enable_s3_endpoint" {
-  description = "Enable S3 VPC endpoint"
-  type        = bool
-  default     = true
-}
-
-variable "enable_dynamodb_endpoint" {
-  description = "Enable DynamoDB VPC endpoint"
   type        = bool
   default     = true
 }

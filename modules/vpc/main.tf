@@ -1,7 +1,7 @@
 ################################################################################
-# VPC Module
-# Description: Creates VPC with public, private, and database subnets
-# Features: Multi-AZ, NAT Gateways, Flow Logs, VPC Endpoints
+# VPC Module - Main Configuration
+# Purpose: Create VPC with multi-AZ architecture
+# Well-Architected Pillars: Reliability, Security, Performance
 ################################################################################
 
 # VPC
@@ -26,100 +26,113 @@ resource "aws_internet_gateway" "main" {
   tags = merge(
     var.tags,
     {
-      Name        = "${var.vpc_name}-igw"
-      Environment = var.environment
+      Name = "${var.vpc_name}-igw"
     }
   )
 }
 
+################################################################################
 # Public Subnets
+################################################################################
+
 resource "aws_subnet" "public" {
   count = length(var.public_subnet_cidrs)
 
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_cidrs[count.index]
-  availability_zone       = var.availability_zones[count.index]
+  availability_zone       = var.availability_zones[count.index % length(var.availability_zones)]
   map_public_ip_on_launch = true
 
   tags = merge(
     var.tags,
     {
-      Name        = "${var.vpc_name}-public-${var.availability_zones[count.index]}"
-      Environment = var.environment
-      Tier        = "public"
+      Name = "${var.vpc_name}-public-${var.availability_zones[count.index % length(var.availability_zones)]}"
+      Tier = "public"
+      Type = "public"
     }
   )
 }
 
-# Private Subnets
+################################################################################
+# Private Subnets (Application Tier)
+################################################################################
+
 resource "aws_subnet" "private" {
   count = length(var.private_subnet_cidrs)
 
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_subnet_cidrs[count.index]
-  availability_zone = var.availability_zones[count.index]
+  availability_zone = var.availability_zones[count.index % length(var.availability_zones)]
 
   tags = merge(
     var.tags,
     {
-      Name        = "${var.vpc_name}-private-${var.availability_zones[count.index]}"
-      Environment = var.environment
-      Tier        = "private"
+      Name = "${var.vpc_name}-private-${var.availability_zones[count.index % length(var.availability_zones)]}"
+      Tier = "private"
+      Type = "application"
     }
   )
 }
 
+################################################################################
 # Database Subnets
+################################################################################
+
 resource "aws_subnet" "database" {
   count = length(var.database_subnet_cidrs)
 
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.database_subnet_cidrs[count.index]
-  availability_zone = var.availability_zones[count.index]
+  availability_zone = var.availability_zones[count.index % length(var.availability_zones)]
 
   tags = merge(
     var.tags,
     {
-      Name        = "${var.vpc_name}-database-${var.availability_zones[count.index]}"
-      Environment = var.environment
-      Tier        = "database"
+      Name = "${var.vpc_name}-database-${var.availability_zones[count.index % length(var.availability_zones)]}"
+      Tier = "database"
+      Type = "database"
     }
   )
 }
 
-# Database Subnet Group
-resource "aws_db_subnet_group" "main" {
+# Database Subnet Group for RDS
+resource "aws_db_subnet_group" "database" {
   name       = "${var.vpc_name}-db-subnet-group"
   subnet_ids = aws_subnet.database[*].id
 
   tags = merge(
     var.tags,
     {
-      Name        = "${var.vpc_name}-db-subnet-group"
-      Environment = var.environment
+      Name = "${var.vpc_name}-db-subnet-group"
     }
   )
 }
 
+################################################################################
 # Elastic IPs for NAT Gateways
+################################################################################
+
 resource "aws_eip" "nat" {
-  count  = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : length(var.availability_zones)) : 0
+  count = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : (var.one_nat_gateway_per_az ? length(var.availability_zones) : length(var.public_subnet_cidrs))) : 0
+
   domain = "vpc"
 
   tags = merge(
     var.tags,
     {
-      Name        = "${var.vpc_name}-nat-eip-${count.index + 1}"
-      Environment = var.environment
+      Name = "${var.vpc_name}-nat-eip-${count.index + 1}"
     }
   )
 
   depends_on = [aws_internet_gateway.main]
 }
 
+################################################################################
 # NAT Gateways
+################################################################################
+
 resource "aws_nat_gateway" "main" {
-  count = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : length(var.availability_zones)) : 0
+  count = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : (var.one_nat_gateway_per_az ? length(var.availability_zones) : length(var.public_subnet_cidrs))) : 0
 
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
@@ -127,110 +140,164 @@ resource "aws_nat_gateway" "main" {
   tags = merge(
     var.tags,
     {
-      Name        = "${var.vpc_name}-nat-${var.availability_zones[count.index]}"
-      Environment = var.environment
+      Name = "${var.vpc_name}-nat-${count.index + 1}"
     }
   )
 
   depends_on = [aws_internet_gateway.main]
 }
 
-# Public Route Table
+################################################################################
+# Route Tables - Public
+################################################################################
+
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
   tags = merge(
     var.tags,
     {
-      Name        = "${var.vpc_name}-public-rt"
-      Environment = var.environment
-      Tier        = "public"
+      Name = "${var.vpc_name}-public-rt"
+      Type = "public"
     }
   )
 }
 
-# Public Route to Internet Gateway
 resource "aws_route" "public_internet" {
   route_table_id         = aws_route_table.public.id
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = aws_internet_gateway.main.id
 }
 
-# Public Route Table Associations
 resource "aws_route_table_association" "public" {
-  count = length(var.public_subnet_cidrs)
+  count = length(aws_subnet.public)
 
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
-# Private Route Tables
+################################################################################
+# Route Tables - Private
+################################################################################
+
 resource "aws_route_table" "private" {
-  count  = var.single_nat_gateway ? 1 : length(var.availability_zones)
+  count = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : length(var.private_subnet_cidrs)) : 1
+
   vpc_id = aws_vpc.main.id
 
   tags = merge(
     var.tags,
     {
-      Name        = "${var.vpc_name}-private-rt-${count.index + 1}"
-      Environment = var.environment
-      Tier        = "private"
+      Name = "${var.vpc_name}-private-rt-${count.index + 1}"
+      Type = "private"
     }
   )
 }
 
-# Private Routes to NAT Gateway
 resource "aws_route" "private_nat" {
-  count = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : length(var.availability_zones)) : 0
+  count = var.enable_nat_gateway ? length(aws_route_table.private) : 0
 
   route_table_id         = aws_route_table.private[count.index].id
   destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.main[count.index].id
+  nat_gateway_id         = var.single_nat_gateway ? aws_nat_gateway.main[0].id : aws_nat_gateway.main[count.index].id
 }
 
-# Private Route Table Associations
 resource "aws_route_table_association" "private" {
-  count = length(var.private_subnet_cidrs)
+  count = length(aws_subnet.private)
 
   subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private[var.single_nat_gateway ? 0 : count.index].id
+  route_table_id = var.single_nat_gateway ? aws_route_table.private[0].id : aws_route_table.private[count.index % length(aws_route_table.private)].id
 }
 
-# VPC Flow Logs
-resource "aws_flow_log" "main" {
-  count = var.enable_flow_logs ? 1 : 0
+################################################################################
+# Route Tables - Database
+################################################################################
 
-  iam_role_arn    = var.create_flow_logs_cloudwatch_iam_role ? aws_iam_role.flow_logs[0].arn : null
-  log_destination = var.create_flow_logs_cloudwatch_log_group ? aws_cloudwatch_log_group.flow_logs[0].arn : null
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.main.id
+resource "aws_route_table" "database" {
+  count = length(var.database_subnet_cidrs) > 0 ? 1 : 0
+
+  vpc_id = aws_vpc.main.id
 
   tags = merge(
     var.tags,
     {
-      Name        = "${var.vpc_name}-flow-logs"
-      Environment = var.environment
+      Name = "${var.vpc_name}-database-rt"
+      Type = "database"
     }
   )
 }
 
-# CloudWatch Log Group for Flow Logs
+resource "aws_route_table_association" "database" {
+  count = length(aws_subnet.database)
+
+  subnet_id      = aws_subnet.database[count.index].id
+  route_table_id = aws_route_table.database[0].id
+}
+
+################################################################################
+# VPC Endpoints - S3 (Gateway Endpoint)
+################################################################################
+
+resource "aws_vpc_endpoint" "s3" {
+  count = var.enable_s3_endpoint ? 1 : 0
+
+  vpc_id       = aws_vpc.main.id
+  service_name = "com.amazonaws.${data.aws_region.current.name}.s3"
+
+  route_table_ids = concat(
+    [aws_route_table.public.id],
+    aws_route_table.private[*].id
+  )
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "${var.vpc_name}-s3-endpoint"
+    }
+  )
+}
+
+################################################################################
+# VPC Endpoints - DynamoDB (Gateway Endpoint)
+################################################################################
+
+resource "aws_vpc_endpoint" "dynamodb" {
+  count = var.enable_dynamodb_endpoint ? 1 : 0
+
+  vpc_id       = aws_vpc.main.id
+  service_name = "com.amazonaws.${data.aws_region.current.name}.dynamodb"
+
+  route_table_ids = concat(
+    [aws_route_table.public.id],
+    aws_route_table.private[*].id
+  )
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "${var.vpc_name}-dynamodb-endpoint"
+    }
+  )
+}
+
+################################################################################
+# VPC Flow Logs
+################################################################################
+
 resource "aws_cloudwatch_log_group" "flow_logs" {
   count = var.enable_flow_logs && var.create_flow_logs_cloudwatch_log_group ? 1 : 0
 
-  name              = "/aws/vpc/flow-logs/${var.vpc_name}"
+  name              = "/aws/vpc/${var.vpc_name}/flow-logs"
   retention_in_days = var.flow_logs_retention_in_days
 
   tags = merge(
     var.tags,
     {
-      Name        = "${var.vpc_name}-flow-logs"
-      Environment = var.environment
+      Name = "${var.vpc_name}-flow-logs"
     }
   )
 }
 
-# IAM Role for Flow Logs
 resource "aws_iam_role" "flow_logs" {
   count = var.enable_flow_logs && var.create_flow_logs_cloudwatch_iam_role ? 1 : 0
 
@@ -238,25 +305,20 @@ resource "aws_iam_role" "flow_logs" {
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "vpc-flow-logs.amazonaws.com"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "vpc-flow-logs.amazonaws.com"
+        }
       }
-    }]
+    ]
   })
 
-  tags = merge(
-    var.tags,
-    {
-      Name        = "${var.vpc_name}-flow-logs-role"
-      Environment = var.environment
-    }
-  )
+  tags = var.tags
 }
 
-# IAM Policy for Flow Logs
 resource "aws_iam_role_policy" "flow_logs" {
   count = var.enable_flow_logs && var.create_flow_logs_cloudwatch_iam_role ? 1 : 0
 
@@ -281,34 +343,24 @@ resource "aws_iam_role_policy" "flow_logs" {
   })
 }
 
-# S3 VPC Endpoint (Gateway)
-resource "aws_vpc_endpoint" "s3" {
-  count = var.enable_s3_endpoint ? 1 : 0
+resource "aws_flow_log" "main" {
+  count = var.enable_flow_logs ? 1 : 0
 
-  vpc_id            = aws_vpc.main.id
-  service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
-  vpc_endpoint_type = "Gateway"
-  route_table_ids   = concat(aws_route_table.private[*].id, [aws_route_table.public.id])
+  iam_role_arn    = aws_iam_role.flow_logs[0].arn
+  log_destination = aws_cloudwatch_log_group.flow_logs[0].arn
+  traffic_type    = "ALL"
+  vpc_id          = aws_vpc.main.id
 
   tags = merge(
     var.tags,
     {
-      Name        = "${var.vpc_name}-s3-endpoint"
-      Environment = var.environment
+      Name = "${var.vpc_name}-flow-log"
     }
   )
 }
 
-# DynamoDB VPC Endpoint (Gateway)
-resource "aws_vpc_endpoint" "dynamodb" {
-  count = var.enable_dynamodb_endpoint ? 1 : 0
+################################################################################
+# Data Sources
+################################################################################
 
-  vpc_id            = aws_vpc.main.id
-  service_name      = "com.amazonaws.${data.aws_region.current.name}.dynamodb"
-  vpc_endpoint_type = "Gateway"
-  route_table_ids   = concat(aws_route_table.private[*].id, [aws_route_table.public.id])
-
-  tags = merge(
-    var.tags,
-    {
-      Name        = "${var.vpc_name}-dynamodb-endpoint"
+data "aws_region" "current" {}
