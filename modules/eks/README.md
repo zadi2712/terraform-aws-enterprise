@@ -1,15 +1,58 @@
 # EKS Cluster Module
 
-Amazon EKS (Elastic Kubernetes Service) cluster with managed node groups.
+Comprehensive Amazon EKS (Elastic Kubernetes Service) cluster module with managed node groups and enterprise-ready add-ons.
 
 ## Features
-- EKS Control Plane
-- Managed Node Groups
-- IRSA (IAM Roles for Service Accounts)
-- Cluster autoscaling
-- Add-ons support (VPC CNI, CoreDNS, kube-proxy)
+
+### Core Components
+- **EKS Control Plane** - Fully managed Kubernetes control plane
+- **Managed Node Groups** - Auto-scaling worker nodes with customizable instance types
+- **IRSA (IAM Roles for Service Accounts)** - Secure pod-level AWS permissions
+- **Envelope Encryption** - KMS encryption for Kubernetes secrets
+- **Control Plane Logging** - CloudWatch logs for API, audit, authenticator, controller manager, and scheduler
+
+### Add-ons Included
+- **VPC CNI** - Native VPC networking for pods
+- **CoreDNS** - DNS service discovery
+- **kube-proxy** - Network proxy
+- **EBS CSI Driver** - Persistent storage with EBS volumes
+- **Cluster Autoscaler** - Automatic node scaling based on pod requirements
+- **Cert-Manager** - Automated TLS certificate management with Let's Encrypt
+- **AWS Load Balancer Controller** - Provision ALB/NLB for Kubernetes services
+- **NGINX Ingress Controller** - HTTP/HTTPS ingress management (via Helm)
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                       EKS Cluster                            │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │              Control Plane (Managed by AWS)            │ │
+│  │  • API Server  • Controller Manager  • Scheduler       │ │
+│  └────────────────────────────────────────────────────────┘ │
+│                            │                                 │
+│  ┌─────────────────────────┴────────────────────────────┐  │
+│  │              Node Groups (Managed Workers)            │  │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐           │  │
+│  │  │  Node 1  │  │  Node 2  │  │  Node 3  │           │  │
+│  │  │  ┌────┐  │  │  ┌────┐  │  │  ┌────┐  │           │  │
+│  │  │  │Pod │  │  │  │Pod │  │  │  │Pod │  │           │  │
+│  │  │  └────┘  │  │  └────┘  │  │  └────┘  │           │  │
+│  │  └──────────┘  └──────────┘  └──────────┘           │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │                    Add-ons Layer                      │  │
+│  │  • Cluster Autoscaler  • Cert-Manager                │  │
+│  │  • AWS LB Controller   • NGINX Ingress               │  │
+│  │  • EBS CSI Driver      • VPC CNI                     │  │
+│  └──────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ## Usage
+
+### Basic Example
 
 ```hcl
 module "eks" {
@@ -23,15 +66,3 @@ module "eks" {
   
   node_groups = {
     general = {
-      desired_size   = 3
-      min_size       = 2
-      max_size       = 10
-      instance_types = ["t3.large"]
-    }
-  }
-  
-  tags = {
-    Environment = "production"
-  }
-}
-```
