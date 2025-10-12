@@ -1,0 +1,38 @@
+################################################################################
+# Complete VPC Endpoints Example - Variables
+# Copy this file to terraform.tfvars and update with your values
+################################################################################
+
+# VPC Configuration
+# Replace with your actual VPC ID
+vpc_id = "vpc-0123456789abcdef0"
+
+# AWS Region
+region = "us-east-1"
+
+# NOTE: The complete example uses data sources to automatically discover:
+# - VPC CIDR block
+# - Private subnet IDs (tagged with Type = "private")
+# - Route table IDs (tagged with Type = "private")
+#
+# Ensure your VPC resources have the following tags:
+# - Subnets: Type = "private"
+# - Route Tables: Type = "private"
+#
+# Alternatively, you can modify the example to use explicit values:
+#
+# vpc_cidr = "10.0.0.0/16"
+# private_subnet_ids = ["subnet-xxx", "subnet-yyy", "subnet-zzz"]
+# route_table_ids    = ["rtb-xxx", "rtb-yyy"]
+
+# Resource naming prefix
+name_prefix = "enterprise-prod"
+
+# Common tags
+tags = {
+  Environment = "production"
+  Project     = "enterprise-infrastructure"
+  ManagedBy   = "Terraform"
+  CostCenter  = "platform"
+  Owner       = "platform-engineering"
+}

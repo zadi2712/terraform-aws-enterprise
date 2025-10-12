@@ -1,0 +1,32 @@
+################################################################################
+# Basic VPC Endpoints Example - Variables
+# Copy this file to terraform.tfvars and update with your values
+################################################################################
+
+# VPC Configuration
+# Replace with your actual VPC ID
+vpc_id = "vpc-0123456789abcdef0"
+
+# VPC CIDR block (must match your VPC)
+vpc_cidr = "10.0.0.0/16"
+
+# Private subnet IDs where endpoints will be deployed
+# Replace with your actual private subnet IDs (2-3 subnets across AZs)
+private_subnet_ids = [
+  "subnet-0123456789abcdef0",  # Private Subnet AZ-1
+  "subnet-0123456789abcdef1",  # Private Subnet AZ-2
+]
+
+# Resource naming prefix
+name_prefix = "myapp-dev"
+
+# AWS Region
+region = "us-east-1"
+
+# Common tags
+tags = {
+  Environment = "development"
+  Project     = "myapp"
+  ManagedBy   = "Terraform"
+  Owner       = "platform-team"
+}
