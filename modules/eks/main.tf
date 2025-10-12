@@ -1087,3 +1087,1205 @@ data "aws_iam_policy_document" "karpenter_policy" {
     resources = ["*"]
   }
 }
+
+data "aws_iam_policy_document" "cluster_autoscaler_assume" {
+  count = var.enable_cluster_autoscaler && !var.enable_karpenter ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.enable_pod_identity ? "pods.eks.amazonaws.com" : aws_iam_openid_connect_provider.this[0].arn]
+    }
+
+    actions = [
+      var.enable_pod_identity ? "sts:AssumeRole" : "sts:AssumeRoleWithWebIdentity",
+      var.enable_pod_identity ? "sts:TagSession" : ""
+    ]
+
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:sub"
+        values   = ["system:serviceaccount:kube-system:cluster-autoscaler"]
+      }
+    }
+    
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:aud"
+        values   = ["sts.amazonaws.com"]
+      }
+    }
+  }
+}
+
+resource "aws_iam_policy" "cluster_autoscaler" {
+  count = var.enable_cluster_autoscaler && !var.enable_karpenter ? 1 : 0
+
+  name        = "${var.cluster_name}-cluster-autoscaler-policy"
+  description = "IAM policy for Cluster Autoscaler"
+  policy      = data.aws_iam_policy_document.cluster_autoscaler_policy[0].json
+
+  tags = local.common_tags
+}
+
+data "aws_iam_policy_document" "cluster_autoscaler_policy" {
+  count = var.enable_cluster_autoscaler && !var.enable_karpenter ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DescribeAutoScalingInstances",
+      "autoscaling:DescribeLaunchConfigurations",
+      "autoscaling:DescribeScalingActivities",
+      "autoscaling:DescribeTags",
+      "ec2:DescribeInstanceTypes",
+      "ec2:DescribeLaunchTemplateVersions"
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "autoscaling:SetDesiredCapacity",
+      "autoscaling:TerminateInstanceInAutoScalingGroup",
+      "ec2:DescribeImages",
+      "ec2:GetInstanceTypesFromInstanceRequirements",
+      "eks:DescribeNodegroup"
+    ]
+
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "autoscaling:ResourceTag/k8s.io/cluster-autoscaler/${var.cluster_name}"
+      values   = ["owned"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
+  count = var.enable_cluster_autoscaler && !var.enable_karpenter ? 1 : 0
+
+  policy_arn = aws_iam_policy.cluster_autoscaler[0].arn
+  role       = aws_iam_role.cluster_autoscaler[0].name
+}
+
+################################################################################
+# IRSA for Cert-Manager
+################################################################################
+
+resource "aws_iam_role" "cert_manager" {
+  count = var.enable_cert_manager ? 1 : 0
+
+  name               = "${var.cluster_name}-cert-manager-irsa"
+  assume_role_policy = data.aws_iam_policy_document.cert_manager_assume[0].json
+  tags               = local.common_tags
+}
+
+data "aws_iam_policy_document" "cert_manager_assume" {
+  count = var.enable_cert_manager ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.enable_pod_identity ? "pods.eks.amazonaws.com" : aws_iam_openid_connect_provider.this[0].arn]
+    }
+
+    actions = [
+      var.enable_pod_identity ? "sts:AssumeRole" : "sts:AssumeRoleWithWebIdentity",
+      var.enable_pod_identity ? "sts:TagSession" : ""
+    ]
+
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:sub"
+        values   = ["system:serviceaccount:cert-manager:cert-manager"]
+      }
+    }
+    
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:aud"
+        values   = ["sts.amazonaws.com"]
+      }
+    }
+  }
+}
+
+resource "aws_iam_policy" "cert_manager" {
+  count = var.enable_cert_manager ? 1 : 0
+
+  name        = "${var.cluster_name}-cert-manager-policy"
+  description = "IAM policy for Cert-Manager Route53 DNS validation"
+  policy      = data.aws_iam_policy_document.cert_manager_policy[0].json
+
+  tags = local.common_tags
+}
+
+data "aws_iam_policy_document" "cert_manager_policy" {
+  count = var.enable_cert_manager ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "route53:GetChange"
+    ]
+
+    resources = ["arn:aws:route53:::change/*"]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "route53:ChangeResourceRecordSets",
+      "route53:ListResourceRecordSets"
+    ]
+
+    resources = var.cert_manager_route53_zone_arns
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "route53:ListHostedZonesByName",
+      "route53:ListHostedZones"
+    ]
+
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "cert_manager" {
+  count = var.enable_cert_manager ? 1 : 0
+
+  policy_arn = aws_iam_policy.cert_manager[0].arn
+  role       = aws_iam_role.cert_manager[0].name
+}
+
+################################################################################
+# IRSA for AWS Load Balancer Controller
+################################################################################
+
+resource "aws_iam_role" "aws_load_balancer_controller" {
+  count = var.enable_aws_load_balancer_controller ? 1 : 0
+
+  name               = "${var.cluster_name}-aws-load-balancer-controller-irsa"
+  assume_role_policy = data.aws_iam_policy_document.aws_load_balancer_controller_assume[0].json
+  tags               = local.common_tags
+}
+
+data "aws_iam_policy_document" "aws_load_balancer_controller_assume" {
+  count = var.enable_aws_load_balancer_controller ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.enable_pod_identity ? "pods.eks.amazonaws.com" : aws_iam_openid_connect_provider.this[0].arn]
+    }
+
+    actions = [
+      var.enable_pod_identity ? "sts:AssumeRole" : "sts:AssumeRoleWithWebIdentity",
+      var.enable_pod_identity ? "sts:TagSession" : ""
+    ]
+
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:sub"
+        values   = ["system:serviceaccount:kube-system:aws-load-balancer-controller"]
+      }
+    }
+    
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:aud"
+        values   = ["sts.amazonaws.com"]
+      }
+    }
+  }
+}
+
+resource "aws_iam_policy" "aws_load_balancer_controller" {
+  count = var.enable_aws_load_balancer_controller ? 1 : 0
+
+  name        = "${var.cluster_name}-aws-load-balancer-controller-policy"
+  description = "IAM policy for AWS Load Balancer Controller"
+  policy      = var.aws_load_balancer_controller_policy_json != null ? var.aws_load_balancer_controller_policy_json : file("${path.module}/policies/aws-load-balancer-controller-policy.json")
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
+  count = var.enable_aws_load_balancer_controller ? 1 : 0
+
+  policy_arn = aws_iam_policy.aws_load_balancer_controller[0].arn
+  role       = aws_iam_role.aws_load_balancer_controller[0].name
+}
+
+################################################################################
+# CloudWatch Log Group for EKS
+################################################################################
+
+resource "aws_cloudwatch_log_group" "this" {
+  count = length(var.cluster_log_types) > 0 ? 1 : 0
+
+  name              = "/aws/eks/${var.cluster_name}/cluster"
+  retention_in_days = var.log_retention_days
+  kms_key_id        = var.kms_key_arn
+
+  tags = local.common_tags
+}
+
+################################################################################
+# Security Group Rules for Node-to-Node Communication
+################################################################################
+
+resource "aws_security_group_rule" "node_to_node" {
+  count = var.create_node_security_group_rules ? 1 : 0
+
+  description              = "Allow nodes to communicate with each other"
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 65535
+  protocol                 = "-1"
+  source_security_group_id = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
+  security_group_id        = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
+}
+
+resource "aws_security_group_rule" "node_to_cluster_api" {
+  count = var.create_node_security_group_rules ? 1 : 0
+
+  description              = "Allow nodes to communicate with the cluster API server"
+  type                     = "ingress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  source_security_group_id = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
+  security_group_id        = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
+}
+
+data "aws_iam_policy_document" "cluster_autoscaler_assume" {
+  count = var.enable_cluster_autoscaler && !var.enable_karpenter ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.enable_pod_identity ? "pods.eks.amazonaws.com" : aws_iam_openid_connect_provider.this[0].arn]
+    }
+
+    actions = [
+      var.enable_pod_identity ? "sts:AssumeRole" : "sts:AssumeRoleWithWebIdentity",
+      var.enable_pod_identity ? "sts:TagSession" : ""
+    ]
+
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:sub"
+        values   = ["system:serviceaccount:kube-system:cluster-autoscaler"]
+      }
+    }
+    
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:aud"
+        values   = ["sts.amazonaws.com"]
+      }
+    }
+  }
+}
+
+resource "aws_iam_policy" "cluster_autoscaler" {
+  count = var.enable_cluster_autoscaler && !var.enable_karpenter ? 1 : 0
+
+  name        = "${var.cluster_name}-cluster-autoscaler-policy"
+  description = "IAM policy for Cluster Autoscaler"
+  policy      = data.aws_iam_policy_document.cluster_autoscaler_policy[0].json
+
+  tags = local.common_tags
+}
+
+data "aws_iam_policy_document" "cluster_autoscaler_policy" {
+  count = var.enable_cluster_autoscaler && !var.enable_karpenter ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DescribeAutoScalingInstances",
+      "autoscaling:DescribeLaunchConfigurations",
+      "autoscaling:DescribeScalingActivities",
+      "autoscaling:DescribeTags",
+      "ec2:DescribeInstanceTypes",
+      "ec2:DescribeLaunchTemplateVersions",
+      "ec2:DescribeImages",
+      "ec2:GetInstanceTypesFromInstanceRequirements",
+      "eks:DescribeNodegroup"
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "autoscaling:SetDesiredCapacity",
+      "autoscaling:TerminateInstanceInAutoScalingGroup"
+    ]
+
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "autoscaling:ResourceTag/k8s.io/cluster-autoscaler/${var.cluster_name}"
+      values   = ["owned"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
+  count = var.enable_cluster_autoscaler && !var.enable_karpenter ? 1 : 0
+
+  policy_arn = aws_iam_policy.cluster_autoscaler[0].arn
+  role       = aws_iam_role.cluster_autoscaler[0].name
+}
+
+# Cluster Autoscaler Pod Identity Association (if using Pod Identity)
+resource "aws_eks_pod_identity_association" "cluster_autoscaler" {
+  count = var.enable_pod_identity && var.enable_cluster_autoscaler && !var.enable_karpenter ? 1 : 0
+
+  cluster_name    = aws_eks_cluster.this.name
+  namespace       = "kube-system"
+  service_account = "cluster-autoscaler"
+  role_arn        = aws_iam_role.cluster_autoscaler[0].arn
+
+  tags = local.common_tags
+}
+
+################################################################################
+# Cert-Manager IRSA
+################################################################################
+
+resource "aws_iam_role" "cert_manager" {
+  count = var.enable_cert_manager ? 1 : 0
+
+  name               = "${var.cluster_name}-cert-manager-irsa"
+  assume_role_policy = data.aws_iam_policy_document.cert_manager_assume[0].json
+  tags               = local.common_tags
+}
+
+data "aws_iam_policy_document" "cert_manager_assume" {
+  count = var.enable_cert_manager ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.enable_pod_identity ? "pods.eks.amazonaws.com" : aws_iam_openid_connect_provider.this[0].arn]
+    }
+
+    actions = [
+      var.enable_pod_identity ? "sts:AssumeRole" : "sts:AssumeRoleWithWebIdentity",
+      var.enable_pod_identity ? "sts:TagSession" : ""
+    ]
+
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:sub"
+        values   = ["system:serviceaccount:cert-manager:cert-manager"]
+      }
+    }
+
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:aud"
+        values   = ["sts.amazonaws.com"]
+      }
+    }
+  }
+}
+
+resource "aws_iam_policy" "cert_manager" {
+  count = var.enable_cert_manager ? 1 : 0
+
+  name        = "${var.cluster_name}-cert-manager-policy"
+  description = "IAM policy for Cert-Manager Route53 DNS validation"
+  policy      = data.aws_iam_policy_document.cert_manager_policy[0].json
+
+  tags = local.common_tags
+}
+
+data "aws_iam_policy_document" "cert_manager_policy" {
+  count = var.enable_cert_manager ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "route53:GetChange"
+    ]
+
+    resources = ["arn:aws:route53:::change/*"]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "route53:ChangeResourceRecordSets",
+      "route53:ListResourceRecordSets"
+    ]
+
+    resources = var.cert_manager_route53_zone_arns
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "route53:ListHostedZonesByName",
+      "route53:ListHostedZones"
+    ]
+
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "cert_manager" {
+  count = var.enable_cert_manager ? 1 : 0
+
+  policy_arn = aws_iam_policy.cert_manager[0].arn
+  role       = aws_iam_role.cert_manager[0].name
+}
+
+# Cert-Manager Pod Identity Association (if using Pod Identity)
+resource "aws_eks_pod_identity_association" "cert_manager" {
+  count = var.enable_pod_identity && var.enable_cert_manager ? 1 : 0
+
+  cluster_name    = aws_eks_cluster.this.name
+  namespace       = "cert-manager"
+  service_account = "cert-manager"
+  role_arn        = aws_iam_role.cert_manager[0].arn
+
+  tags = local.common_tags
+}
+
+################################################################################
+# AWS Load Balancer Controller IRSA
+################################################################################
+
+resource "aws_iam_role" "aws_load_balancer_controller" {
+  count = var.enable_aws_load_balancer_controller ? 1 : 0
+
+  name               = "${var.cluster_name}-aws-load-balancer-controller-irsa"
+  assume_role_policy = data.aws_iam_policy_document.aws_load_balancer_controller_assume[0].json
+  tags               = local.common_tags
+}
+
+data "aws_iam_policy_document" "aws_load_balancer_controller_assume" {
+  count = var.enable_aws_load_balancer_controller ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.enable_pod_identity ? "pods.eks.amazonaws.com" : aws_iam_openid_connect_provider.this[0].arn]
+    }
+
+    actions = [
+      var.enable_pod_identity ? "sts:AssumeRole" : "sts:AssumeRoleWithWebIdentity",
+      var.enable_pod_identity ? "sts:TagSession" : ""
+    ]
+
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:sub"
+        values   = ["system:serviceaccount:kube-system:aws-load-balancer-controller"]
+      }
+    }
+
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:aud"
+        values   = ["sts.amazonaws.com"]
+      }
+    }
+  }
+}
+
+resource "aws_iam_policy" "aws_load_balancer_controller" {
+  count = var.enable_aws_load_balancer_controller ? 1 : 0
+
+  name        = "${var.cluster_name}-aws-load-balancer-controller-policy"
+  description = "IAM policy for AWS Load Balancer Controller"
+  policy      = var.aws_load_balancer_controller_policy_json != null ? var.aws_load_balancer_controller_policy_json : file("${path.module}/policies/aws-load-balancer-controller-policy.json")
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
+  count = var.enable_aws_load_balancer_controller ? 1 : 0
+
+  policy_arn = aws_iam_policy.aws_load_balancer_controller[0].arn
+  role       = aws_iam_role.aws_load_balancer_controller[0].name
+}
+
+# AWS Load Balancer Controller Pod Identity Association (if using Pod Identity)
+resource "aws_eks_pod_identity_association" "aws_load_balancer_controller" {
+  count = var.enable_pod_identity && var.enable_aws_load_balancer_controller ? 1 : 0
+
+  cluster_name    = aws_eks_cluster.this.name
+  namespace       = "kube-system"
+  service_account = "aws-load-balancer-controller"
+  role_arn        = aws_iam_role.aws_load_balancer_controller[0].arn
+
+  tags = local.common_tags
+}
+
+################################################################################
+# CloudWatch Log Group for EKS Control Plane Logs
+################################################################################
+
+resource "aws_cloudwatch_log_group" "this" {
+  count = length(var.cluster_log_types) > 0 ? 1 : 0
+
+  name              = "/aws/eks/${var.cluster_name}/cluster"
+  retention_in_days = var.log_retention_days
+  kms_key_id        = var.kms_key_arn
+
+  tags = local.common_tags
+}
+
+data "aws_iam_policy_document" "cluster_autoscaler_assume" {
+  count = var.enable_cluster_autoscaler && !var.enable_karpenter ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.enable_pod_identity ? "pods.eks.amazonaws.com" : aws_iam_openid_connect_provider.this[0].arn]
+    }
+
+    actions = [
+      var.enable_pod_identity ? "sts:AssumeRole" : "sts:AssumeRoleWithWebIdentity",
+      var.enable_pod_identity ? "sts:TagSession" : ""
+    ]
+
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:sub"
+        values   = ["system:serviceaccount:kube-system:cluster-autoscaler"]
+      }
+    }
+    
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:aud"
+        values   = ["sts.amazonaws.com"]
+      }
+    }
+  }
+}
+
+resource "aws_iam_policy" "cluster_autoscaler" {
+  count = var.enable_cluster_autoscaler && !var.enable_karpenter ? 1 : 0
+
+  name        = "${var.cluster_name}-cluster-autoscaler-policy"
+  description = "IAM policy for Cluster Autoscaler"
+  policy      = data.aws_iam_policy_document.cluster_autoscaler_policy[0].json
+
+  tags = local.common_tags
+}
+
+data "aws_iam_policy_document" "cluster_autoscaler_policy" {
+  count = var.enable_cluster_autoscaler && !var.enable_karpenter ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DescribeAutoScalingInstances",
+      "autoscaling:DescribeLaunchConfigurations",
+      "autoscaling:DescribeScalingActivities",
+      "autoscaling:DescribeTags",
+      "ec2:DescribeInstanceTypes",
+      "ec2:DescribeLaunchTemplateVersions"
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "autoscaling:SetDesiredCapacity",
+      "autoscaling:TerminateInstanceInAutoScalingGroup",
+      "ec2:DescribeImages",
+      "ec2:GetInstanceTypesFromInstanceRequirements",
+      "eks:DescribeNodegroup"
+    ]
+
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "autoscaling:ResourceTag/k8s.io/cluster-autoscaler/${var.cluster_name}"
+      values   = ["owned"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
+  count = var.enable_cluster_autoscaler && !var.enable_karpenter ? 1 : 0
+
+  policy_arn = aws_iam_policy.cluster_autoscaler[0].arn
+  role       = aws_iam_role.cluster_autoscaler[0].name
+}
+
+################################################################################
+# Cert-Manager IRSA
+################################################################################
+
+resource "aws_iam_role" "cert_manager" {
+  count = var.enable_cert_manager ? 1 : 0
+
+  name               = "${var.cluster_name}-cert-manager-irsa"
+  assume_role_policy = data.aws_iam_policy_document.cert_manager_assume[0].json
+  tags               = local.common_tags
+}
+
+data "aws_iam_policy_document" "cert_manager_assume" {
+  count = var.enable_cert_manager ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.enable_pod_identity ? "pods.eks.amazonaws.com" : aws_iam_openid_connect_provider.this[0].arn]
+    }
+
+    actions = [
+      var.enable_pod_identity ? "sts:AssumeRole" : "sts:AssumeRoleWithWebIdentity",
+      var.enable_pod_identity ? "sts:TagSession" : ""
+    ]
+
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:sub"
+        values   = ["system:serviceaccount:cert-manager:cert-manager"]
+      }
+    }
+    
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:aud"
+        values   = ["sts.amazonaws.com"]
+      }
+    }
+  }
+}
+
+resource "aws_iam_policy" "cert_manager" {
+  count = var.enable_cert_manager ? 1 : 0
+
+  name        = "${var.cluster_name}-cert-manager-policy"
+  description = "IAM policy for Cert-Manager Route53 DNS validation"
+  policy      = data.aws_iam_policy_document.cert_manager_policy[0].json
+
+  tags = local.common_tags
+}
+
+data "aws_iam_policy_document" "cert_manager_policy" {
+  count = var.enable_cert_manager ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "route53:GetChange"
+    ]
+
+    resources = ["arn:aws:route53:::change/*"]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "route53:ChangeResourceRecordSets",
+      "route53:ListResourceRecordSets"
+    ]
+
+    resources = var.cert_manager_route53_zone_arns
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "route53:ListHostedZonesByName",
+      "route53:ListHostedZones"
+    ]
+
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "cert_manager" {
+  count = var.enable_cert_manager ? 1 : 0
+
+  policy_arn = aws_iam_policy.cert_manager[0].arn
+  role       = aws_iam_role.cert_manager[0].name
+}
+
+################################################################################
+# AWS Load Balancer Controller IRSA
+################################################################################
+
+resource "aws_iam_role" "aws_load_balancer_controller" {
+  count = var.enable_aws_load_balancer_controller ? 1 : 0
+
+  name               = "${var.cluster_name}-aws-load-balancer-controller-irsa"
+  assume_role_policy = data.aws_iam_policy_document.aws_load_balancer_controller_assume[0].json
+  tags               = local.common_tags
+}
+
+data "aws_iam_policy_document" "aws_load_balancer_controller_assume" {
+  count = var.enable_aws_load_balancer_controller ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.enable_pod_identity ? "pods.eks.amazonaws.com" : aws_iam_openid_connect_provider.this[0].arn]
+    }
+
+    actions = [
+      var.enable_pod_identity ? "sts:AssumeRole" : "sts:AssumeRoleWithWebIdentity",
+      var.enable_pod_identity ? "sts:TagSession" : ""
+    ]
+
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:sub"
+        values   = ["system:serviceaccount:kube-system:aws-load-balancer-controller"]
+      }
+    }
+    
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:aud"
+        values   = ["sts.amazonaws.com"]
+      }
+    }
+  }
+}
+
+resource "aws_iam_policy" "aws_load_balancer_controller" {
+  count = var.enable_aws_load_balancer_controller ? 1 : 0
+
+  name        = "${var.cluster_name}-aws-load-balancer-controller-policy"
+  description = "IAM policy for AWS Load Balancer Controller"
+  policy      = var.aws_load_balancer_controller_policy_json != null ? var.aws_load_balancer_controller_policy_json : file("${path.module}/policies/aws-load-balancer-controller-policy.json")
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
+  count = var.enable_aws_load_balancer_controller ? 1 : 0
+
+  policy_arn = aws_iam_policy.aws_load_balancer_controller[0].arn
+  role       = aws_iam_role.aws_load_balancer_controller[0].name
+}
+
+################################################################################
+# CloudWatch Log Group for EKS Control Plane Logs
+################################################################################
+
+resource "aws_cloudwatch_log_group" "this" {
+  count = length(var.cluster_log_types) > 0 ? 1 : 0
+
+  name              = "/aws/eks/${var.cluster_name}/cluster"
+  retention_in_days = var.log_retention_days
+  kms_key_id        = var.kms_key_arn
+
+  tags = local.common_tags
+}
+
+################################################################################
+# Security Group Rules for Cluster
+################################################################################
+
+resource "aws_security_group_rule" "cluster_ingress_workstation_https" {
+  count = var.enable_workstation_access && length(var.workstation_cidr_blocks) > 0 ? 1 : 0
+
+  description       = "Allow workstation to communicate with the cluster API Server"
+  type              = "ingress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  cidr_blocks       = var.workstation_cidr_blocks
+  security_group_id = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
+}
+
+data "aws_iam_policy_document" "cluster_autoscaler_assume" {
+  count = var.enable_cluster_autoscaler && !var.enable_karpenter ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.enable_pod_identity ? "pods.eks.amazonaws.com" : aws_iam_openid_connect_provider.this[0].arn]
+    }
+
+    actions = [
+      var.enable_pod_identity ? "sts:AssumeRole" : "sts:AssumeRoleWithWebIdentity",
+      var.enable_pod_identity ? "sts:TagSession" : ""
+    ]
+
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:sub"
+        values   = ["system:serviceaccount:kube-system:cluster-autoscaler"]
+      }
+    }
+    
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:aud"
+        values   = ["sts.amazonaws.com"]
+      }
+    }
+  }
+}
+
+resource "aws_iam_policy" "cluster_autoscaler" {
+  count = var.enable_cluster_autoscaler && !var.enable_karpenter ? 1 : 0
+
+  name        = "${var.cluster_name}-cluster-autoscaler-policy"
+  description = "IAM policy for Cluster Autoscaler"
+  policy      = data.aws_iam_policy_document.cluster_autoscaler_policy[0].json
+
+  tags = local.common_tags
+}
+
+data "aws_iam_policy_document" "cluster_autoscaler_policy" {
+  count = var.enable_cluster_autoscaler && !var.enable_karpenter ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DescribeAutoScalingInstances",
+      "autoscaling:DescribeLaunchConfigurations",
+      "autoscaling:DescribeScalingActivities",
+      "autoscaling:DescribeTags",
+      "ec2:DescribeInstanceTypes",
+      "ec2:DescribeLaunchTemplateVersions",
+      "ec2:DescribeImages",
+      "ec2:GetInstanceTypesFromInstanceRequirements",
+      "eks:DescribeNodegroup"
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "autoscaling:SetDesiredCapacity",
+      "autoscaling:TerminateInstanceInAutoScalingGroup"
+    ]
+
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "autoscaling:ResourceTag/k8s.io/cluster-autoscaler/${var.cluster_name}"
+      values   = ["owned"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
+  count = var.enable_cluster_autoscaler && !var.enable_karpenter ? 1 : 0
+
+  policy_arn = aws_iam_policy.cluster_autoscaler[0].arn
+  role       = aws_iam_role.cluster_autoscaler[0].name
+}
+
+################################################################################
+# AWS Load Balancer Controller IRSA
+################################################################################
+
+resource "aws_iam_role" "aws_load_balancer_controller" {
+  count = var.enable_aws_load_balancer_controller ? 1 : 0
+
+  name               = "${var.cluster_name}-aws-load-balancer-controller-irsa"
+  assume_role_policy = data.aws_iam_policy_document.aws_load_balancer_controller_assume[0].json
+  tags               = local.common_tags
+}
+
+data "aws_iam_policy_document" "aws_load_balancer_controller_assume" {
+  count = var.enable_aws_load_balancer_controller ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.enable_pod_identity ? "pods.eks.amazonaws.com" : aws_iam_openid_connect_provider.this[0].arn]
+    }
+
+    actions = [
+      var.enable_pod_identity ? "sts:AssumeRole" : "sts:AssumeRoleWithWebIdentity",
+      var.enable_pod_identity ? "sts:TagSession" : ""
+    ]
+
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:sub"
+        values   = ["system:serviceaccount:kube-system:aws-load-balancer-controller"]
+      }
+    }
+    
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:aud"
+        values   = ["sts.amazonaws.com"]
+      }
+    }
+  }
+}
+
+resource "aws_iam_policy" "aws_load_balancer_controller" {
+  count = var.enable_aws_load_balancer_controller ? 1 : 0
+
+  name        = "${var.cluster_name}-aws-load-balancer-controller-policy"
+  description = "IAM policy for AWS Load Balancer Controller"
+  policy      = var.aws_load_balancer_controller_policy_json != null ? var.aws_load_balancer_controller_policy_json : file("${path.module}/policies/aws-load-balancer-controller-policy.json")
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
+  count = var.enable_aws_load_balancer_controller ? 1 : 0
+
+  policy_arn = aws_iam_policy.aws_load_balancer_controller[0].arn
+  role       = aws_iam_role.aws_load_balancer_controller[0].name
+}
+
+# AWS Load Balancer Controller Pod Identity Association
+resource "aws_eks_pod_identity_association" "aws_load_balancer_controller" {
+  count = var.enable_pod_identity && var.enable_aws_load_balancer_controller ? 1 : 0
+
+  cluster_name    = aws_eks_cluster.this.name
+  namespace       = "kube-system"
+  service_account = "aws-load-balancer-controller"
+  role_arn        = aws_iam_role.aws_load_balancer_controller[0].arn
+
+  tags = local.common_tags
+}
+
+################################################################################
+# External DNS IRSA (Optional)
+################################################################################
+
+resource "aws_iam_role" "external_dns" {
+  count = var.enable_external_dns ? 1 : 0
+
+  name               = "${var.cluster_name}-external-dns-irsa"
+  assume_role_policy = data.aws_iam_policy_document.external_dns_assume[0].json
+  tags               = local.common_tags
+}
+
+data "aws_iam_policy_document" "external_dns_assume" {
+  count = var.enable_external_dns ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.enable_pod_identity ? "pods.eks.amazonaws.com" : aws_iam_openid_connect_provider.this[0].arn]
+    }
+
+    actions = [
+      var.enable_pod_identity ? "sts:AssumeRole" : "sts:AssumeRoleWithWebIdentity",
+      var.enable_pod_identity ? "sts:TagSession" : ""
+    ]
+
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:sub"
+        values   = ["system:serviceaccount:kube-system:external-dns"]
+      }
+    }
+    
+    dynamic "condition" {
+      for_each = var.enable_pod_identity ? [] : [1]
+      content {
+        test     = "StringEquals"
+        variable = "${local.oidc_issuer}:aud"
+        values   = ["sts.amazonaws.com"]
+      }
+    }
+  }
+}
+
+resource "aws_iam_policy" "external_dns" {
+  count = var.enable_external_dns ? 1 : 0
+
+  name        = "${var.cluster_name}-external-dns-policy"
+  description = "IAM policy for External DNS"
+  policy      = data.aws_iam_policy_document.external_dns_policy[0].json
+
+  tags = local.common_tags
+}
+
+data "aws_iam_policy_document" "external_dns_policy" {
+  count = var.enable_external_dns ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "route53:ChangeResourceRecordSets"
+    ]
+
+    resources = var.external_dns_route53_zone_arns
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "route53:ListHostedZones",
+      "route53:ListResourceRecordSets",
+      "route53:ListTagsForResource"
+    ]
+
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "external_dns" {
+  count = var.enable_external_dns ? 1 : 0
+
+  policy_arn = aws_iam_policy.external_dns[0].arn
+  role       = aws_iam_role.external_dns[0].name
+}
+
+# External DNS Pod Identity Association
+resource "aws_eks_pod_identity_association" "external_dns" {
+  count = var.enable_pod_identity && var.enable_external_dns ? 1 : 0
+
+  cluster_name    = aws_eks_cluster.this.name
+  namespace       = "kube-system"
+  service_account = "external-dns"
+  role_arn        = aws_iam_role.external_dns[0].arn
+
+  tags = local.common_tags
+}
+
+################################################################################
+# CloudWatch Log Group for EKS Control Plane Logs
+################################################################################
+
+resource "aws_cloudwatch_log_group" "this" {
+  count = length(var.cluster_log_types) > 0 ? 1 : 0
+
+  name              = "/aws/eks/${var.cluster_name}/cluster"
+  retention_in_days = var.log_retention_days
+  kms_key_id        = var.kms_key_arn
+
+  tags = local.common_tags
+}
+
+################################################################################
+# Security Group Rules for Node-to-Node Communication
+################################################################################
+
+resource "aws_security_group_rule" "node_to_node" {
+  count = var.create_node_security_group_rules ? 1 : 0
+
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 65535
+  protocol                 = "-1"
+  source_security_group_id = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
+  security_group_id        = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
+  description              = "Allow nodes to communicate with each other"
+}
