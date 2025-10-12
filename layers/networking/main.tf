@@ -129,3 +129,95 @@ module "vpc_endpoints" {
     secretsmanager = {
       service             = "secretsmanager"
       private_dns_enabled = true
+      subnet_ids          = module.vpc.private_subnet_ids
+    }
+    kms = {
+      service             = "kms"
+      private_dns_enabled = true
+      subnet_ids          = module.vpc.private_subnet_ids
+    }
+    rds = {
+      service             = "rds"
+      private_dns_enabled = true
+      subnet_ids          = module.vpc.private_subnet_ids
+    }
+    elasticache = {
+      service             = "elasticache"
+      private_dns_enabled = true
+      subnet_ids          = module.vpc.private_subnet_ids
+    }
+    sns = {
+      service             = "sns"
+      private_dns_enabled = true
+      subnet_ids          = module.vpc.private_subnet_ids
+    }
+    sqs = {
+      service             = "sqs"
+      private_dns_enabled = true
+      subnet_ids          = module.vpc.private_subnet_ids
+    }
+    lambda = {
+      service             = "lambda"
+      private_dns_enabled = true
+      subnet_ids          = module.vpc.private_subnet_ids
+    }
+    sts = {
+      service             = "sts"
+      private_dns_enabled = true
+      subnet_ids          = module.vpc.private_subnet_ids
+    }
+    elasticloadbalancing = {
+      service             = "elasticloadbalancing"
+      private_dns_enabled = true
+      subnet_ids          = module.vpc.private_subnet_ids
+    }
+    autoscaling = {
+      service             = "autoscaling"
+      private_dns_enabled = true
+      subnet_ids          = module.vpc.private_subnet_ids
+    }
+    cloudwatch = {
+      service             = "monitoring"
+      private_dns_enabled = true
+      subnet_ids          = module.vpc.private_subnet_ids
+    }
+    events = {
+      service             = "events"
+      private_dns_enabled = true
+      subnet_ids          = module.vpc.private_subnet_ids
+    }
+    # Gateway Endpoints (no subnets required)
+    s3 = {
+      service      = "s3"
+      service_type = "Gateway"
+      route_table_ids = concat(
+        module.vpc.private_route_table_ids,
+        module.vpc.public_route_table_ids
+      )
+    }
+    dynamodb = {
+      service      = "dynamodb"
+      service_type = "Gateway"
+      route_table_ids = concat(
+        module.vpc.private_route_table_ids,
+        module.vpc.public_route_table_ids
+      )
+    }
+  }
+
+  # VPC and network configuration
+  vpc_cidr               = module.vpc.vpc_cidr
+  name_prefix            = "${var.project_name}-${var.environment}"
+  create_security_group  = true
+
+  # Tags
+  tags = merge(
+    var.common_tags,
+    {
+      Name        = "${var.project_name}-${var.environment}-vpc-endpoints"
+      Environment = var.environment
+    }
+  )
+
+  depends_on = [module.vpc]
+}

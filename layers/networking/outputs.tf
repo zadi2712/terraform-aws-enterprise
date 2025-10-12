@@ -102,3 +102,32 @@ output "network_summary" {
     environment           = var.environment
   }
 }
+
+################################################################################
+# VPC Endpoints Outputs
+################################################################################
+
+output "vpc_endpoints_security_group_id" {
+  description = "ID of the VPC endpoints security group"
+  value       = var.enable_vpc_endpoints ? module.vpc_endpoints[0].security_group_id : null
+}
+
+output "vpc_endpoints_interface" {
+  description = "Map of interface VPC endpoint IDs"
+  value       = var.enable_vpc_endpoints ? module.vpc_endpoints[0].interface_endpoints : {}
+}
+
+output "vpc_endpoints_gateway" {
+  description = "Map of gateway VPC endpoint IDs"
+  value       = var.enable_vpc_endpoints ? module.vpc_endpoints[0].gateway_endpoints : {}
+}
+
+output "vpc_endpoints_all" {
+  description = "Map of all VPC endpoint IDs"
+  value       = var.enable_vpc_endpoints ? module.vpc_endpoints[0].all_endpoints : {}
+}
+
+output "vpc_endpoints_count" {
+  description = "Count of VPC endpoints created"
+  value       = var.enable_vpc_endpoints ? module.vpc_endpoints[0].endpoint_count : { interface = 0, gateway = 0, total = 0 }
+}
