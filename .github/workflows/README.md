@@ -7,6 +7,7 @@ This directory contains all GitHub Actions workflow definitions for automated in
 ```
 .github/workflows/
 ├── reusable-terraform.yml       # Core reusable workflow (foundation)
+├── branch-based-deploy.yml      # 🆕 Auto-deploy based on branch (NEW!)
 ├── deploy-networking.yml        # Networking layer (VPC, Subnets, Endpoints)
 ├── deploy-security.yml          # Security layer (IAM, KMS, Security Groups)
 ├── deploy-compute.yml           # Compute layer (EKS, EC2, ASG)
@@ -33,6 +34,61 @@ This is the foundation that all other workflows build upon. It contains all the 
 - Apply/destroy operations
 - PR commenting with plan output
 - Comprehensive step summaries
+
+### 🆕 Branch-Based Auto Deployment Workflow
+
+**File**: `branch-based-deploy.yml`
+
+**NEW!** Automatically deploys to environments based on which branch you push to. This provides a GitOps-style deployment flow.
+
+**Branch Mapping**:
+- **`main`** branch → Auto-deploys to **PROD** + **UAT** environments
+- **`dev`** branch → Auto-deploys to **DEV** environment  
+- **`staging`** branch → Auto-deploys to **QA** environment
+
+**Key Features**:
+- Automatic environment selection based on branch
+- All 7 layers deployed sequentially with proper dependency order
+- Concurrent deployments to PROD and UAT when pushing to main
+- Path-based filtering (ignores docs, markdown files)
+- Comprehensive deployment summary with status for each layer
+- Concurrency control to prevent overlapping deployments
+
+**Usage**:
+```bash
+# Deploy to DEV
+git checkout dev
+git commit -m "Update infrastructure"
+git push origin dev  # Automatically deploys to dev
+
+# Deploy to QA
+git checkout staging
+git merge dev
+git push origin staging  # Automatically deploys to qa
+
+# Deploy to PROD + UAT
+git checkout main
+git merge staging
+git push origin main  # Automatically deploys to prod AND uat
+```
+
+**Workflow Behavior**:
+1. **Determines target environment(s)** based on branch name
+2. **Deploys all layers sequentially** in dependency order:
+   - networking → security → storage → database → compute → dns → monitoring
+3. **Runs apply action** automatically (not just plan)
+4. **Generates comprehensive summary** with status for each layer and environment
+
+**When to use**:
+- ✅ Standard development workflow (dev → staging → main)
+- ✅ GitOps-style deployments
+- ✅ CI/CD automation
+- ✅ When you want automatic deployments on git push
+
+**When NOT to use**:
+- ❌ For testing individual layers (use layer-specific workflows)
+- ❌ For running only plan without apply (use manual workflows)
+- ❌ For destroy operations (use manual workflows with destroy action)
 
 ### Layer Workflows
 
@@ -117,6 +173,20 @@ on:
 
 ### Push Trigger
 
+**Branch-Based Auto Deployment** (`branch-based-deploy.yml`):
+```yaml
+on:
+  push:
+    branches:
+      - main    # → deploys to prod + uat
+      - dev     # → deploys to dev
+      - staging # → deploys to qa
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+```
+
+**Layer-Specific Workflows**:
 ```yaml
 on:
   push:
@@ -127,8 +197,8 @@ on:
 ```
 
 **Behavior**:
-- Automatically applies changes to dev environment when merged to main
-- Only triggers when relevant files change
+- Branch-based: Automatically applies changes to designated environment(s)
+- Layer-specific: Only triggers when relevant files change
 
 ### Pull Request Trigger
 
@@ -250,6 +320,19 @@ Add before/after deployment hooks in `reusable-terraform.yml`:
 
 ### Development Workflow
 
+**Option 1: Branch-Based Auto Deployment (Recommended)**
+
+1. ✅ Create feature branch from `dev`
+2. ✅ Make focused, atomic changes
+3. ✅ Push to `dev` branch → Auto-deploys to DEV
+4. ✅ Test in DEV environment
+5. ✅ Merge to `staging` → Auto-deploys to QA
+6. ✅ Test in QA environment
+7. ✅ Get approval and merge to `main` → Auto-deploys to PROD + UAT
+8. ✅ Verify in production
+
+**Option 2: Manual Workflow (For specific scenarios)**
+
 1. ✅ Always create feature branch
 2. ✅ Make focused, atomic changes
 3. ✅ Create PR and review plan
@@ -259,6 +342,16 @@ Add before/after deployment hooks in `reusable-terraform.yml`:
 
 ### Deployment Strategy
 
+**GitOps Branch-Based (NEW - Recommended)**:
+```
+dev branch (push) → Auto-deploy DEV
+     ↓
+staging branch (merge from dev) → Auto-deploy QA
+     ↓
+main branch (merge from staging) → Auto-deploy PROD + UAT
+```
+
+**Traditional Manual**:
 ```
 Feature Branch → PR (plan) → Main (auto-deploy dev) → Manual (qa) → Manual (uat) → Manual (prod)
 ```
