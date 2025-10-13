@@ -141,6 +141,46 @@ Comprehensive integration guide including:
 
 ## 🎯 Use Cases
 
+### Architecture Overview
+
+```mermaid
+graph TB
+    subgraph Module["ECR Module"]
+        Repos[Multiple Repositories]
+        Features[Security Features]
+        Lifecycle[Lifecycle Management]
+    end
+    
+    subgraph Apps["Application Types"]
+        Micro[Microservices]
+        Lambda[Lambda Functions]
+        MultiAcct[Multi-Account]
+        DR[Disaster Recovery]
+    end
+    
+    subgraph Platform["Container Platforms"]
+        EKS[Amazon EKS]
+        ECS[Amazon ECS]
+        LambdaSvc[AWS Lambda]
+    end
+    
+    Repos --> Micro
+    Repos --> Lambda
+    Repos --> MultiAcct
+    Repos --> DR
+    
+    Micro --> EKS
+    Micro --> ECS
+    Lambda --> LambdaSvc
+    
+    Features --> Repos
+    Lifecycle --> Repos
+    
+    style Module fill:#e1f5ff
+    style Apps fill:#ffe1e1
+    style Platform fill:#fff4e1
+```
+
 ### 1. Microservices Architecture
 ```hcl
 ecr_repositories = {
@@ -481,3 +521,94 @@ For issues or questions:
 **Version:** 1.0  
 **Maintained By:** Platform Engineering Team  
 **Status:** ✅ Ready for Use
+
+
+### Deployment Process Flow
+
+```mermaid
+flowchart TD
+    Start([Start Deployment]) --> Review[Review Documentation]
+    Review --> Config[Add ECR Configuration]
+    Config --> Syntax{Syntax<br/>Correct?}
+    
+    Syntax -->|No| Fix[Fix Configuration]
+    Fix --> Config
+    Syntax -->|Yes| Init[terraform init]
+    
+    Init --> Plan[terraform plan]
+    Plan --> Verify{Changes<br/>Look Good?}
+    
+    Verify -->|No| Adjust[Adjust Configuration]
+    Adjust --> Config
+    Verify -->|Yes| Apply[terraform apply]
+    
+    Apply --> Created{Resources<br/>Created?}
+    Created -->|No| Debug[Debug Errors]
+    Debug --> Fix
+    Created -->|Yes| GetURL[Get Repository URLs]
+    
+    GetURL --> AuthDocker[Authenticate Docker]
+    AuthDocker --> BuildImage[Build Docker Image]
+    BuildImage --> TagImage[Tag Image]
+    TagImage --> PushImage[Push to ECR]
+    
+    PushImage --> ScanComplete{Scan<br/>Complete?}
+    ScanComplete -->|Wait| ScanComplete
+    ScanComplete -->|Complete| CheckVuln{Vulnerabilities?}
+    
+    CheckVuln -->|Critical| FixIssues[Fix Vulnerabilities]
+    FixIssues --> BuildImage
+    CheckVuln -->|None/Low| Deploy[Deploy to Cluster]
+    
+    Deploy --> Success([Deployment Complete])
+    
+    style Start fill:#e1f5ff
+    style Success fill:#e1ffe1
+    style FixIssues fill:#ffe1e1
+```
+
+### Security Layers
+
+```mermaid
+graph TB
+    subgraph L1["Layer 1: Infrastructure"]
+        VPC[VPC Isolation]
+        SG[Security Groups]
+        NACL[Network ACLs]
+    end
+    
+    subgraph L2["Layer 2: Access Control"]
+        IAM[IAM Policies]
+        RepoPolicy[Repository Policies]
+        CrossAcct[Cross-Account Rules]
+    end
+    
+    subgraph L3["Layer 3: Data Protection"]
+        Encrypt[Encryption at Rest]
+        TLS[TLS in Transit]
+        KMS[KMS Keys]
+    end
+    
+    subgraph L4["Layer 4: Image Security"]
+        Scan[Vulnerability Scanning]
+        Immutable[Immutable Tags]
+        Lifecycle[Lifecycle Policies]
+    end
+    
+    subgraph L5["Layer 5: Monitoring"]
+        CW[CloudWatch Logs]
+        Alarms[CloudWatch Alarms]
+        Audit[CloudTrail Audit]
+    end
+    
+    L1 --> L2
+    L2 --> L3
+    L3 --> L4
+    L4 --> L5
+    
+    style L1 fill:#e1f5ff
+    style L2 fill:#ffe1e1
+    style L3 fill:#fff4e1
+    style L4 fill:#e1ffe1
+    style L5 fill:#f0e1ff
+```
