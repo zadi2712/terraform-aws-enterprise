@@ -176,3 +176,29 @@ output "bastion_security_group_id" {
   description = "Bastion security group ID"
   value       = var.enable_bastion ? module.bastion_security_group[0].security_group_id : null
 }
+
+
+################################################################################
+# ECR SSM Parameter Store Outputs
+################################################################################
+
+output "ecr_ssm_parameters" {
+  description = "Map of SSM Parameter Store paths for all ECR repositories"
+  value = {
+    for k, v in module.ecr_repositories : k => v.ssm_parameters
+  }
+}
+
+output "ecr_ssm_parameter_urls" {
+  description = "Map of SSM Parameter paths for repository URLs"
+  value = {
+    for k, v in module.ecr_repositories : k => v.ssm_parameter_repository_url
+  }
+}
+
+output "ecr_ssm_parameter_arns" {
+  description = "Map of SSM Parameter paths for repository ARNs"
+  value = {
+    for k, v in module.ecr_repositories : k => v.ssm_parameter_repository_arn
+  }
+}

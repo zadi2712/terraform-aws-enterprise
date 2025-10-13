@@ -221,3 +221,94 @@ module "vpc_endpoints" {
 
   depends_on = [module.vpc]
 }
+
+
+################################################################################
+# Store Outputs in SSM Parameter Store
+# Enables both terraform_remote_state and SSM-based retrieval
+################################################################################
+
+module "ssm_outputs" {
+  source = "../../../modules/ssm-outputs"
+
+  project_name = var.project_name
+  environment  = var.environment
+  layer_name   = "networking"
+
+  outputs = {
+    # VPC
+    vpc_id   = module.vpc.vpc_id
+    vpc_cidr = module.vpc.vpc_cidr
+    vpc_arn  = module.vpc.vpc_arn
+
+    # Subnets
+    public_subnet_ids              = module.vpc.public_subnet_ids
+    private_subnet_ids             = module.vpc.private_subnet_ids
+    database_subnet_ids            = module.vpc.database_subnet_ids
+    database_subnet_group_name     = module.vpc.database_subnet_group_name
+
+    # Gateways
+    nat_gateway_ids      = module.vpc.nat_gateway_ids
+    internet_gateway_id  = module.vpc.internet_gateway_id
+
+    # Route Tables
+    public_route_table_ids  = module.vpc.public_route_table_ids
+    private_route_table_ids = module.vpc.private_route_table_ids
+
+    # VPC Endpoints
+    vpc_endpoint_s3_id                        = module.vpc.vpc_endpoint_s3_id
+    vpc_endpoint_dynamodb_id                  = module.vpc.vpc_endpoint_dynamodb_id
+    vpc_endpoints_security_group_id           = var.enable_vpc_endpoints ? module.vpc_endpoints[0].security_group_id : null
+    vpc_endpoints_interface                   = var.enable_vpc_endpoints ? module.vpc_endpoints[0].interface_endpoints : {}
+    vpc_endpoints_gateway                     = var.enable_vpc_endpoints ? module.vpc_endpoints[0].gateway_endpoints : {}
+    vpc_endpoints_all                         = var.enable_vpc_endpoints ? module.vpc_endpoints[0].all_endpoints : {}
+    vpc_endpoints_count                       = var.enable_vpc_endpoints ? module.vpc_endpoints[0].endpoint_count : { interface = 0, gateway = 0, total = 0 }
+
+    # Flow Logs
+    vpc_flow_log_id                           = module.vpc.vpc_flow_log_id
+    vpc_flow_log_cloudwatch_log_group_name    = module.vpc.vpc_flow_log_cloudwatch_log_group_name
+
+    # Other
+    availability_zones = var.availability_zones
+
+    # Network Summary
+    network_summary = {
+      vpc_id              = module.vpc.vpc_id
+      vpc_cidr            = module.vpc.vpc_cidr
+      public_subnet_ids   = module.vpc.public_subnet_ids
+      private_subnet_ids  = module.vpc.private_subnet_ids
+      database_subnet_ids = module.vpc.database_subnet_ids
+      availability_zones  = var.availability_zones
+      environment         = var.environment
+    }
+  }
+
+  output_descriptions = {
+    vpc_id                                 = "ID of the VPC"
+    vpc_cidr                               = "CIDR block of the VPC"
+    vpc_arn                                = "ARN of the VPC"
+    public_subnet_ids                      = "List of public subnet IDs"
+    private_subnet_ids                     = "List of private subnet IDs"
+    database_subnet_ids                    = "List of database subnet IDs"
+    database_subnet_group_name             = "Name of the database subnet group"
+    nat_gateway_ids                        = "List of NAT Gateway IDs"
+    internet_gateway_id                    = "ID of the Internet Gateway"
+    public_route_table_ids                 = "List of public route table IDs"
+    private_route_table_ids                = "List of private route table IDs"
+    vpc_endpoint_s3_id                     = "ID of the S3 VPC endpoint"
+    vpc_endpoint_dynamodb_id               = "ID of the DynamoDB VPC endpoint"
+    vpc_endpoints_security_group_id        = "ID of the VPC endpoints security group"
+    vpc_endpoints_interface                = "Map of interface VPC endpoint IDs"
+    vpc_endpoints_gateway                  = "Map of gateway VPC endpoint IDs"
+    vpc_endpoints_all                      = "Map of all VPC endpoint IDs"
+    vpc_endpoints_count                    = "Count of VPC endpoints created"
+    vpc_flow_log_id                        = "ID of the VPC Flow Log"
+    vpc_flow_log_cloudwatch_log_group_name = "Name of the CloudWatch Log Group for VPC Flow Logs"
+    availability_zones                     = "List of availability zones used"
+    network_summary                        = "Summary of network configuration for use by other layers"
+  }
+
+  tags = var.common_tags
+
+  depends_on = [module.vpc, module.vpc_endpoints]
+}

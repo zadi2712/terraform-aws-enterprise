@@ -72,3 +72,41 @@ module "logs_bucket" {
 
   tags = var.common_tags
 }
+
+
+################################################################################
+# Store Outputs in SSM Parameter Store
+################################################################################
+
+module "ssm_outputs" {
+  source = "../../../modules/ssm-outputs"
+
+  project_name = var.project_name
+  environment  = var.environment
+  layer_name   = "storage"
+
+  outputs = {
+    application_bucket_id   = module.application_bucket.bucket_id
+    application_bucket_arn  = module.application_bucket.bucket_arn
+    application_bucket_name = module.application_bucket.bucket_id
+    logs_bucket_id          = module.logs_bucket.bucket_id
+    logs_bucket_arn         = module.logs_bucket.bucket_arn
+    logs_bucket_name        = module.logs_bucket.bucket_id
+  }
+
+  output_descriptions = {
+    application_bucket_id   = "Application S3 bucket ID"
+    application_bucket_arn  = "Application S3 bucket ARN"
+    application_bucket_name = "Application S3 bucket name"
+    logs_bucket_id          = "Logs S3 bucket ID"
+    logs_bucket_arn         = "Logs S3 bucket ARN"
+    logs_bucket_name        = "Logs S3 bucket name"
+  }
+
+  tags = var.common_tags
+
+  depends_on = [
+    module.application_bucket,
+    module.logs_bucket
+  ]
+}

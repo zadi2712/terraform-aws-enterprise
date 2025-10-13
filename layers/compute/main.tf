@@ -308,3 +308,87 @@ module "bastion_security_group" {
 
   tags = var.common_tags
 }
+
+
+################################################################################
+# Store Outputs in SSM Parameter Store
+################################################################################
+
+module "ssm_outputs" {
+  source = "../../../modules/ssm-outputs"
+
+  project_name = var.project_name
+  environment  = var.environment
+  layer_name   = "compute"
+
+  outputs = {
+    # ECR
+    ecr_repository_urls  = { for k, v in module.ecr_repositories : k => v.repository_url }
+    ecr_repository_arns  = { for k, v in module.ecr_repositories : k => v.repository_arn }
+    ecr_repository_names = { for k, v in module.ecr_repositories : k => v.repository_name }
+
+    # EKS
+    eks_cluster_id                             = var.enable_eks ? module.eks_cluster[0].cluster_id : null
+    eks_cluster_name                           = var.enable_eks ? module.eks_cluster[0].cluster_name : null
+    eks_cluster_endpoint                       = var.enable_eks ? module.eks_cluster[0].cluster_endpoint : null
+    eks_cluster_version                        = var.enable_eks ? module.eks_cluster[0].cluster_version : null
+    eks_cluster_security_group_id              = var.enable_eks ? module.eks_cluster[0].cluster_security_group_id : null
+    eks_oidc_provider_arn                      = var.enable_eks ? module.eks_cluster[0].oidc_provider_arn : null
+    eks_karpenter_iam_role_arn                 = var.enable_eks ? module.eks_cluster[0].karpenter_iam_role_arn : null
+    eks_karpenter_instance_profile_name        = var.enable_eks ? module.eks_cluster[0].karpenter_instance_profile_name : null
+    eks_aws_load_balancer_controller_iam_role_arn = var.enable_eks ? module.eks_cluster[0].aws_load_balancer_controller_iam_role_arn : null
+    eks_external_dns_iam_role_arn              = var.enable_eks ? module.eks_cluster[0].external_dns_iam_role_arn : null
+
+    # ECS
+    ecs_cluster_id   = var.enable_ecs ? module.ecs_cluster[0].cluster_id : null
+    ecs_cluster_name = var.enable_ecs ? module.ecs_cluster[0].cluster_name : null
+    ecs_cluster_arn  = var.enable_ecs ? module.ecs_cluster[0].cluster_arn : null
+
+    # ALB
+    alb_arn               = var.enable_alb ? module.alb[0].lb_arn : null
+    alb_dns_name          = var.enable_alb ? module.alb[0].lb_dns_name : null
+    alb_zone_id           = var.enable_alb ? module.alb[0].lb_zone_id : null
+    alb_security_group_id = var.enable_alb ? module.alb_security_group[0].security_group_id : null
+
+    # Bastion
+    bastion_instance_id       = var.enable_bastion ? module.bastion[0].instance_id : null
+    bastion_public_ip         = var.enable_bastion ? module.bastion[0].public_ip : null
+    bastion_security_group_id = var.enable_bastion ? module.bastion_security_group[0].security_group_id : null
+  }
+
+  output_descriptions = {
+    ecr_repository_urls                        = "Map of ECR repository URLs"
+    ecr_repository_arns                        = "Map of ECR repository ARNs"
+    ecr_repository_names                       = "Map of ECR repository names"
+    eks_cluster_id                             = "EKS cluster ID"
+    eks_cluster_name                           = "EKS cluster name"
+    eks_cluster_endpoint                       = "EKS cluster endpoint URL"
+    eks_cluster_version                        = "EKS cluster Kubernetes version"
+    eks_cluster_security_group_id              = "EKS cluster security group ID"
+    eks_oidc_provider_arn                      = "EKS OIDC provider ARN for IAM roles"
+    eks_karpenter_iam_role_arn                 = "Karpenter IAM role ARN"
+    eks_karpenter_instance_profile_name        = "Karpenter EC2 instance profile name"
+    eks_aws_load_balancer_controller_iam_role_arn = "AWS Load Balancer Controller IAM role ARN"
+    eks_external_dns_iam_role_arn              = "External DNS IAM role ARN"
+    ecs_cluster_id                             = "ECS cluster ID"
+    ecs_cluster_name                           = "ECS cluster name"
+    ecs_cluster_arn                            = "ECS cluster ARN"
+    alb_arn                                    = "Application Load Balancer ARN"
+    alb_dns_name                               = "Application Load Balancer DNS name"
+    alb_zone_id                                = "Application Load Balancer Route53 zone ID"
+    alb_security_group_id                      = "Application Load Balancer security group ID"
+    bastion_instance_id                        = "Bastion host EC2 instance ID"
+    bastion_public_ip                          = "Bastion host public IP address"
+    bastion_security_group_id                  = "Bastion host security group ID"
+  }
+
+  tags = var.common_tags
+
+  depends_on = [
+    module.ecr_repositories,
+    module.eks_cluster,
+    module.ecs_cluster,
+    module.alb,
+    module.bastion
+  ]
+}

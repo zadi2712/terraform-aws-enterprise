@@ -186,3 +186,126 @@ resource "aws_cloudwatch_log_group" "scan_findings" {
     }
   )
 }
+
+################################################################################
+# SSM Parameter Store - Store ECR Repository Information
+################################################################################
+
+# Store repository URL
+resource "aws_ssm_parameter" "repository_url" {
+  name        = "/ecr/${var.repository_name}/url"
+  description = "ECR repository URL for ${var.repository_name}"
+  type        = "String"
+  value       = aws_ecr_repository.this.repository_url
+  
+  tags = merge(
+    var.tags,
+    {
+      Name       = "${var.repository_name}-url"
+      Repository = var.repository_name
+      Type       = "ecr-url"
+    }
+  )
+}
+
+# Store repository ARN
+resource "aws_ssm_parameter" "repository_arn" {
+  name        = "/ecr/${var.repository_name}/arn"
+  description = "ECR repository ARN for ${var.repository_name}"
+  type        = "String"
+  value       = aws_ecr_repository.this.arn
+  
+  tags = merge(
+    var.tags,
+    {
+      Name       = "${var.repository_name}-arn"
+      Repository = var.repository_name
+      Type       = "ecr-arn"
+    }
+  )
+}
+
+# Store repository name
+resource "aws_ssm_parameter" "repository_name" {
+  name        = "/ecr/${var.repository_name}/name"
+  description = "ECR repository name for ${var.repository_name}"
+  type        = "String"
+  value       = aws_ecr_repository.this.name
+  
+  tags = merge(
+    var.tags,
+    {
+      Name       = "${var.repository_name}-name"
+      Repository = var.repository_name
+      Type       = "ecr-name"
+    }
+  )
+}
+
+# Store registry ID
+resource "aws_ssm_parameter" "registry_id" {
+  name        = "/ecr/${var.repository_name}/registry-id"
+  description = "ECR registry ID for ${var.repository_name}"
+  type        = "String"
+  value       = aws_ecr_repository.this.registry_id
+  
+  tags = merge(
+    var.tags,
+    {
+      Name       = "${var.repository_name}-registry-id"
+      Repository = var.repository_name
+      Type       = "ecr-registry-id"
+    }
+  )
+}
+
+# Store scanning configuration
+resource "aws_ssm_parameter" "scan_on_push" {
+  name        = "/ecr/${var.repository_name}/scan-on-push"
+  description = "Scan on push configuration for ${var.repository_name}"
+  type        = "String"
+  value       = tostring(var.scan_on_push)
+  
+  tags = merge(
+    var.tags,
+    {
+      Name       = "${var.repository_name}-scan-config"
+      Repository = var.repository_name
+      Type       = "ecr-config"
+    }
+  )
+}
+
+# Store encryption type
+resource "aws_ssm_parameter" "encryption_type" {
+  name        = "/ecr/${var.repository_name}/encryption-type"
+  description = "Encryption type for ${var.repository_name}"
+  type        = "String"
+  value       = var.encryption_type
+  
+  tags = merge(
+    var.tags,
+    {
+      Name       = "${var.repository_name}-encryption"
+      Repository = var.repository_name
+      Type       = "ecr-config"
+    }
+  )
+}
+
+# Store image tag mutability
+resource "aws_ssm_parameter" "image_tag_mutability" {
+  name        = "/ecr/${var.repository_name}/tag-mutability"
+  description = "Image tag mutability for ${var.repository_name}"
+  type        = "String"
+  value       = var.image_tag_mutability
+  
+  tags = merge(
+    var.tags,
+    {
+      Name       = "${var.repository_name}-tag-mutability"
+      Repository = var.repository_name
+      Type       = "ecr-config"
+    }
+  )
+}

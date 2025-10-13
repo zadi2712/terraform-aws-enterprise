@@ -50,3 +50,37 @@ resource "aws_cloudwatch_log_group" "application" {
 
   tags = var.common_tags
 }
+
+
+################################################################################
+# Store Outputs in SSM Parameter Store
+################################################################################
+
+module "ssm_outputs" {
+  source = "../../../modules/ssm-outputs"
+
+  project_name = var.project_name
+  environment  = var.environment
+  layer_name   = "monitoring"
+
+  outputs = {
+    sns_topic_arn   = aws_sns_topic.alerts.arn
+    sns_topic_name  = aws_sns_topic.alerts.name
+    log_group_name  = aws_cloudwatch_log_group.application.name
+    log_group_arn   = aws_cloudwatch_log_group.application.arn
+  }
+
+  output_descriptions = {
+    sns_topic_arn  = "SNS topic ARN for alerts and notifications"
+    sns_topic_name = "SNS topic name"
+    log_group_name = "CloudWatch log group name for application logs"
+    log_group_arn  = "CloudWatch log group ARN"
+  }
+
+  tags = var.common_tags
+
+  depends_on = [
+    aws_sns_topic.alerts,
+    aws_cloudwatch_log_group.application
+  ]
+}

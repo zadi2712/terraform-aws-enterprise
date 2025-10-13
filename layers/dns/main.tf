@@ -33,3 +33,34 @@ resource "aws_route53_zone" "main" {
 
   tags = merge(var.common_tags, { Name = var.domain_name })
 }
+
+
+################################################################################
+# Store Outputs in SSM Parameter Store
+################################################################################
+
+module "ssm_outputs" {
+  source = "../../../modules/ssm-outputs"
+
+  project_name = var.project_name
+  environment  = var.environment
+  layer_name   = "dns"
+
+  outputs = {
+    hosted_zone_id = var.domain_name != "" ? aws_route53_zone.main[0].zone_id : null
+    name_servers   = var.domain_name != "" ? aws_route53_zone.main[0].name_servers : null
+    domain_name    = var.domain_name
+  }
+
+  output_descriptions = {
+    hosted_zone_id = "Route53 hosted zone ID"
+    name_servers   = "Route53 name servers for domain delegation"
+    domain_name    = "Domain name managed by Route53"
+  }
+
+  tags = var.common_tags
+
+  depends_on = [
+    aws_route53_zone.main
+  ]
+}

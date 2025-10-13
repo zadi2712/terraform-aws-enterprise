@@ -106,3 +106,56 @@ output "pull_through_cache_enabled" {
   description = "Whether pull through cache is enabled"
   value       = var.enable_pull_through_cache
 }
+
+
+################################################################################
+# SSM Parameter Store Outputs
+################################################################################
+
+output "ssm_parameter_repository_url" {
+  description = "SSM Parameter Store name for repository URL"
+  value       = aws_ssm_parameter.repository_url.name
+}
+
+output "ssm_parameter_repository_arn" {
+  description = "SSM Parameter Store name for repository ARN"
+  value       = aws_ssm_parameter.repository_arn.name
+}
+
+output "ssm_parameter_repository_name" {
+  description = "SSM Parameter Store name for repository name"
+  value       = aws_ssm_parameter.repository_name.name
+}
+
+output "ssm_parameter_registry_id" {
+  description = "SSM Parameter Store name for registry ID"
+  value       = aws_ssm_parameter.registry_id.name
+}
+
+output "ssm_parameter_scan_on_push" {
+  description = "SSM Parameter Store name for scan on push configuration"
+  value       = aws_ssm_parameter.scan_on_push.name
+}
+
+output "ssm_parameter_encryption_type" {
+  description = "SSM Parameter Store name for encryption type"
+  value       = aws_ssm_parameter.encryption_type.name
+}
+
+output "ssm_parameter_image_tag_mutability" {
+  description = "SSM Parameter Store name for image tag mutability"
+  value       = aws_ssm_parameter.image_tag_mutability.name
+}
+
+output "ssm_parameters" {
+  description = "Map of all SSM Parameter Store names"
+  value = {
+    repository_url          = aws_ssm_parameter.repository_url.name
+    repository_arn          = aws_ssm_parameter.repository_arn.name
+    repository_name         = aws_ssm_parameter.repository_name.name
+    registry_id             = aws_ssm_parameter.registry_id.name
+    scan_on_push            = aws_ssm_parameter.scan_on_push.name
+    encryption_type         = aws_ssm_parameter.encryption_type.name
+    image_tag_mutability    = aws_ssm_parameter.image_tag_mutability.name
+  }
+}
