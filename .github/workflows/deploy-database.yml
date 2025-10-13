@@ -1,0 +1,75 @@
+name: Deploy Database Layer
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target Environment'
+        required: true
+        type: choice
+        options: [dev, qa, uat, prod]
+        default: 'dev'
+      action:
+        description: 'Terraform Action'
+        required: true
+        type: choice
+        options: [plan, apply, destroy]
+        default: 'plan'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'layers/database/**'
+      - 'modules/rds/**'
+      - 'modules/dynamodb/**'
+      - '.github/workflows/deploy-database.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'layers/database/**'
+      - 'modules/rds/**'
+      - 'modules/dynamodb/**'
+
+concurrency:
+  group: database-${{ github.event.inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  plan-on-pr:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: database
+      environment: dev
+      action: plan
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  deploy-on-push:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: database
+      environment: dev
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  manual-deployment:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: database
+      environment: ${{ github.event.inputs.environment }}
+      action: ${{ github.event.inputs.action }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}

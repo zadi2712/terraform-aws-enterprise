@@ -1,0 +1,137 @@
+name: Deploy Networking Layer
+
+# Trigger Configuration
+# - Manual dispatch with environment and action selection
+# - Push to main branch when networking files change
+# - Pull requests targeting networking layer
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target Environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - qa
+          - uat
+          - prod
+        default: 'dev'
+      action:
+        description: 'Terraform Action'
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+        default: 'plan'
+      terraform_version:
+        description: 'Terraform Version'
+        required: false
+        type: string
+        default: '1.9.0'
+  
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'layers/networking/**'
+      - 'modules/vpc/**'
+      - 'modules/vpc-endpoints/**'
+      - '.github/workflows/deploy-networking.yml'
+      - '.github/workflows/reusable-terraform.yml'
+  
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'layers/networking/**'
+      - 'modules/vpc/**'
+      - 'modules/vpc-endpoints/**'
+      - '.github/workflows/deploy-networking.yml'
+      - '.github/workflows/reusable-terraform.yml'
+
+# Prevent concurrent deployments to the same environment
+concurrency:
+  group: networking-${{ github.event.inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+# Set default permissions (principle of least privilege)
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  # ============================================================================
+  # JOB 1: Plan for Pull Requests (Automatic)
+  # ============================================================================
+  plan-on-pr:
+    name: Plan Networking (PR)
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: networking
+      environment: dev  # Always plan against dev for PRs
+      action: plan
+      terraform_version: ${{ github.event.inputs.terraform_version || '1.9.0' }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # ============================================================================
+  # JOB 2: Deploy on Push to Main (Automatic Apply to Dev)
+  # ============================================================================
+  deploy-on-push:
+    name: Deploy Networking (Push)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: networking
+      environment: dev  # Auto-deploy to dev on main branch
+      action: apply
+      terraform_version: '1.9.0'
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # ============================================================================
+  # JOB 3: Manual Deployment (Workflow Dispatch)
+  # ============================================================================
+  manual-deployment:
+    name: ${{ github.event.inputs.action }} Networking - ${{ github.event.inputs.environment }}
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: networking
+      environment: ${{ github.event.inputs.environment }}
+      action: ${{ github.event.inputs.action }}
+      terraform_version: ${{ github.event.inputs.terraform_version || '1.9.0' }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # ============================================================================
+  # JOB 4: Notification Job (Optional)
+  # ============================================================================
+  notify:
+    name: Send Notification
+    needs: [plan-on-pr, deploy-on-push, manual-deployment]
+    if: always() && (needs.plan-on-pr.result != 'skipped' || needs.deploy-on-push.result != 'skipped' || needs.manual-deployment.result != 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📢 Workflow Status
+        run: |
+          echo "## 🌐 Networking Layer Deployment Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Plan on PR | ${{ needs.plan-on-pr.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy on Push | ${{ needs.deploy-on-push.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Manual Deployment | ${{ needs.manual-deployment.result }} |" >> $GITHUB_STEP_SUMMARY

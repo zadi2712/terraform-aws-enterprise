@@ -1,0 +1,256 @@
+name: Reusable Terraform Workflow
+
+on:
+  workflow_call:
+    inputs:
+      layer:
+        description: 'Infrastructure layer to deploy (networking, security, compute, database, storage, dns, monitoring)'
+        required: true
+        type: string
+      environment:
+        description: 'Target environment (dev, qa, uat, prod)'
+        required: true
+        type: string
+      action:
+        description: 'Terraform action to perform (plan, apply, destroy)'
+        required: true
+        type: string
+        default: 'plan'
+      terraform_version:
+        description: 'Terraform version to use'
+        required: false
+        type: string
+        default: '1.9.0'
+      working_directory:
+        description: 'Working directory for Terraform commands'
+        required: false
+        type: string
+        default: ''
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      AWS_REGION:
+        required: false
+    outputs:
+      plan_output:
+        description: 'Terraform plan output'
+        value: ${{ jobs.terraform.outputs.plan_output }}
+      plan_exitcode:
+        description: 'Terraform plan exit code'
+        value: ${{ jobs.terraform.outputs.plan_exitcode }}
+
+# Set default permissions to read-only for security
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  terraform:
+    name: Terraform ${{ inputs.action }} - ${{ inputs.layer }}/${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    
+    # Use environment for deployment protection rules and secrets
+    environment:
+      name: ${{ inputs.environment }}
+      
+    outputs:
+      plan_output: ${{ steps.plan.outputs.stdout }}
+      plan_exitcode: ${{ steps.plan.outputs.exitcode }}
+    
+    # Set working directory for all run steps
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory != '' && inputs.working_directory || format('layers/{0}', inputs.layer) }}
+    
+    steps:
+      # ============================================================================
+      # STEP 1: Checkout Repository
+      # ============================================================================
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better context
+      
+      # ============================================================================
+      # STEP 2: Configure AWS Credentials
+      # ============================================================================
+      - name: 🔐 Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+          role-duration-seconds: 3600
+          
+      # ============================================================================
+      # STEP 3: Setup Terraform
+      # ============================================================================
+      - name: 🔧 Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform_version }}
+          terraform_wrapper: true  # Enables better output handling
+      
+      # ============================================================================
+      # STEP 4: Terraform Format Check
+      # ============================================================================
+      - name: 🎨 Terraform Format Check
+        id: fmt
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+      
+      # ============================================================================
+      # STEP 5: Terraform Init
+      # ============================================================================
+      - name: 🚀 Terraform Init
+        id: init
+        run: |
+          echo "Initializing Terraform for ${{ inputs.layer }} layer in ${{ inputs.environment }} environment..."
+          terraform init \
+            -backend-config="environments/${{ inputs.environment }}/backend.tfvars" \
+            -upgrade \
+            -reconfigure
+        env:
+          TF_INPUT: false
+      
+      # ============================================================================
+      # STEP 6: Terraform Validate
+      # ============================================================================
+      - name: ✅ Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+      
+      # ============================================================================
+      # STEP 7: Terraform Plan
+      # ============================================================================
+      - name: 📋 Terraform Plan
+        id: plan
+        if: inputs.action == 'plan' || inputs.action == 'apply'
+        run: |
+          echo "Running Terraform plan for ${{ inputs.layer }} layer..."
+          terraform plan \
+            -var-file="environments/${{ inputs.environment }}/terraform.tfvars" \
+            -out=tfplan \
+            -no-color \
+            -detailed-exitcode || echo "exitcode=$?" >> $GITHUB_OUTPUT
+        continue-on-error: true
+        env:
+          TF_INPUT: false
+      
+      # ============================================================================
+      # STEP 8: Upload Plan Artifact
+      # ============================================================================
+      - name: 📦 Upload Plan Artifact
+        if: steps.plan.outcome == 'success' && (inputs.action == 'plan' || inputs.action == 'apply')
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ inputs.layer }}-${{ inputs.environment }}-${{ github.run_number }}
+          path: ${{ inputs.working_directory != '' && inputs.working_directory || format('layers/{0}', inputs.layer) }}/tfplan
+          retention-days: 30
+      
+      # ============================================================================
+      # STEP 9: Comment PR with Plan Output
+      # ============================================================================
+      - name: 💬 Comment PR with Plan
+        if: github.event_name == 'pull_request' && (inputs.action == 'plan' || inputs.action == 'apply')
+        uses: actions/github-script@v7
+        env:
+          PLAN: "${{ steps.plan.outputs.stdout }}"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `#### 🏗️ Terraform Plan for \`${{ inputs.layer }}\` layer - \`${{ inputs.environment }}\` environment
+            
+            #### 📋 Terraform Format and Style 🎨 \`${{ steps.fmt.outcome }}\`
+            #### ⚙️ Terraform Initialization 🚀 \`${{ steps.init.outcome }}\`
+            #### 🤖 Terraform Validation 🤖 \`${{ steps.validate.outcome }}\`
+            #### 📊 Terraform Plan 📋 \`${{ steps.plan.outcome }}\`
+            
+            <details><summary>📄 Show Plan Details</summary>
+            
+            \`\`\`terraform
+            ${process.env.PLAN}
+            \`\`\`
+            
+            </details>
+            
+            **Layer:** \`${{ inputs.layer }}\`
+            **Environment:** \`${{ inputs.environment }}\`
+            **Pusher:** @${{ github.actor }}
+            **Action:** \`${{ github.event_name }}\`
+            **Working Directory:** \`${{ inputs.working_directory != '' && inputs.working_directory || format('layers/{0}', inputs.layer) }}\`
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+      
+      # ============================================================================
+      # STEP 10: Terraform Apply
+      # ============================================================================
+      - name: 🚀 Terraform Apply
+        id: apply
+        if: inputs.action == 'apply' && steps.plan.outcome == 'success'
+        run: |
+          echo "Applying Terraform plan for ${{ inputs.layer }} layer..."
+          terraform apply -auto-approve tfplan
+        env:
+          TF_INPUT: false
+      
+      # ============================================================================
+      # STEP 11: Terraform Destroy (with extra confirmation)
+      # ============================================================================
+      - name: 🗑️ Terraform Destroy
+        id: destroy
+        if: inputs.action == 'destroy'
+        run: |
+          echo "⚠️ DESTROYING infrastructure for ${{ inputs.layer }} layer in ${{ inputs.environment }} environment..."
+          echo "This action will remove all resources managed by this layer."
+          terraform destroy \
+            -var-file="environments/${{ inputs.environment }}/terraform.tfvars" \
+            -auto-approve
+        env:
+          TF_INPUT: false
+      
+      # ============================================================================
+      # STEP 12: Generate Outputs Summary
+      # ============================================================================
+      - name: 📊 Generate Summary
+        if: always()
+        run: |
+          echo "## 🏗️ Terraform Workflow Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Layer** | \`${{ inputs.layer }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`${{ inputs.environment }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Action** | \`${{ inputs.action }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Terraform Version** | \`${{ inputs.terraform_version }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Step Results" >> $GITHUB_STEP_SUMMARY
+          echo "- 🎨 Format Check: \`${{ steps.fmt.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- 🚀 Init: \`${{ steps.init.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Validate: \`${{ steps.validate.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- 📋 Plan: \`${{ steps.plan.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ inputs.action }}" == "apply" ]]; then
+            echo "- 🚀 Apply: \`${{ steps.apply.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ inputs.action }}" == "destroy" ]]; then
+            echo "- 🗑️ Destroy: \`${{ steps.destroy.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      # ============================================================================
+      # STEP 13: Cleanup on Failure
+      # ============================================================================
+      - name: 🧹 Cleanup on Failure
+        if: failure()
+        run: |
+          echo "Cleaning up failed deployment artifacts..."
+          rm -f tfplan
+          rm -rf .terraform

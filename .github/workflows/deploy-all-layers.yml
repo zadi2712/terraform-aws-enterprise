@@ -1,0 +1,201 @@
+name: Deploy All Layers (Sequential)
+
+# This workflow orchestrates deployment of all infrastructure layers in the correct order
+# Dependencies: networking → security → storage → database → compute → dns → monitoring
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target Environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - qa
+          - uat
+          - prod
+        default: 'dev'
+      action:
+        description: 'Terraform Action'
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+        default: 'plan'
+      skip_layers:
+        description: 'Comma-separated layers to skip (e.g., dns,monitoring)'
+        required: false
+        type: string
+        default: ''
+
+concurrency:
+  group: all-layers-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ============================================================================
+  # LAYER 1: Networking (Foundation)
+  # ============================================================================
+  deploy-networking:
+    name: 1️⃣ Deploy Networking
+    if: "!contains(github.event.inputs.skip_layers, 'networking')"
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: networking
+      environment: ${{ github.event.inputs.environment }}
+      action: ${{ github.event.inputs.action }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # ============================================================================
+  # LAYER 2: Security (IAM, KMS, Security Groups)
+  # ============================================================================
+  deploy-security:
+    name: 2️⃣ Deploy Security
+    needs: [deploy-networking]
+    if: "!contains(github.event.inputs.skip_layers, 'security') && !cancelled()"
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: security
+      environment: ${{ github.event.inputs.environment }}
+      action: ${{ github.event.inputs.action }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # ============================================================================
+  # LAYER 3: Storage (S3, EFS)
+  # ============================================================================
+  deploy-storage:
+    name: 3️⃣ Deploy Storage
+    needs: [deploy-security]
+    if: "!contains(github.event.inputs.skip_layers, 'storage') && !cancelled()"
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: storage
+      environment: ${{ github.event.inputs.environment }}
+      action: ${{ github.event.inputs.action }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # ============================================================================
+  # LAYER 4: Database (RDS, DynamoDB)
+  # ============================================================================
+  deploy-database:
+    name: 4️⃣ Deploy Database
+    needs: [deploy-storage]
+    if: "!contains(github.event.inputs.skip_layers, 'database') && !cancelled()"
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: database
+      environment: ${{ github.event.inputs.environment }}
+      action: ${{ github.event.inputs.action }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # ============================================================================
+  # LAYER 5: Compute (EKS, EC2, ASG)
+  # ============================================================================
+  deploy-compute:
+    name: 5️⃣ Deploy Compute
+    needs: [deploy-database]
+    if: "!contains(github.event.inputs.skip_layers, 'compute') && !cancelled()"
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: compute
+      environment: ${{ github.event.inputs.environment }}
+      action: ${{ github.event.inputs.action }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # ============================================================================
+  # LAYER 6: DNS (Route53)
+  # ============================================================================
+  deploy-dns:
+    name: 6️⃣ Deploy DNS
+    needs: [deploy-compute]
+    if: "!contains(github.event.inputs.skip_layers, 'dns') && !cancelled()"
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: dns
+      environment: ${{ github.event.inputs.environment }}
+      action: ${{ github.event.inputs.action }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # ============================================================================
+  # LAYER 7: Monitoring (CloudWatch)
+  # ============================================================================
+  deploy-monitoring:
+    name: 7️⃣ Deploy Monitoring
+    needs: [deploy-dns]
+    if: "!contains(github.event.inputs.skip_layers, 'monitoring') && !cancelled()"
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: monitoring
+      environment: ${{ github.event.inputs.environment }}
+      action: ${{ github.event.inputs.action }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # ============================================================================
+  # SUMMARY JOB: Report deployment status
+  # ============================================================================
+  deployment-summary:
+    name: 📊 Deployment Summary
+    needs: [deploy-networking, deploy-security, deploy-storage, deploy-database, deploy-compute, deploy-dns, deploy-monitoring]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Deployment Report
+        run: |
+          echo "## 🚀 Complete Infrastructure Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** \`${{ github.event.inputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Action:** \`${{ github.event.inputs.action }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Layer Deployment Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Layer | Status | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 1️⃣ Networking | ${{ needs.deploy-networking.result }} | $(if [ '${{ needs.deploy-networking.result }}' == 'success' ]; then echo '✅'; else echo '❌'; fi) |" >> $GITHUB_STEP_SUMMARY
+          echo "| 2️⃣ Security | ${{ needs.deploy-security.result }} | $(if [ '${{ needs.deploy-security.result }}' == 'success' ]; then echo '✅'; else echo '❌'; fi) |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3️⃣ Storage | ${{ needs.deploy-storage.result }} | $(if [ '${{ needs.deploy-storage.result }}' == 'success' ]; then echo '✅'; else echo '❌'; fi) |" >> $GITHUB_STEP_SUMMARY
+          echo "| 4️⃣ Database | ${{ needs.deploy-database.result }} | $(if [ '${{ needs.deploy-database.result }}' == 'success' ]; then echo '✅'; else echo '❌'; fi) |" >> $GITHUB_STEP_SUMMARY
+          echo "| 5️⃣ Compute | ${{ needs.deploy-compute.result }} | $(if [ '${{ needs.deploy-compute.result }}' == 'success' ]; then echo '✅'; else echo '❌'; fi) |" >> $GITHUB_STEP_SUMMARY
+          echo "| 6️⃣ DNS | ${{ needs.deploy-dns.result }} | $(if [ '${{ needs.deploy-dns.result }}' == 'success' ]; then echo '✅'; else echo '❌'; fi) |" >> $GITHUB_STEP_SUMMARY
+          echo "| 7️⃣ Monitoring | ${{ needs.deploy-monitoring.result }} | $(if [ '${{ needs.deploy-monitoring.result }}' == 'success' ]; then echo '✅'; else echo '❌'; fi) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Determine overall status
+          if [ "${{ needs.deploy-networking.result }}" == "success" ] && \
+             [ "${{ needs.deploy-security.result }}" == "success" ] && \
+             [ "${{ needs.deploy-storage.result }}" == "success" ] && \
+             [ "${{ needs.deploy-database.result }}" == "success" ] && \
+             [ "${{ needs.deploy-compute.result }}" == "success" ] && \
+             [ "${{ needs.deploy-dns.result }}" == "success" ] && \
+             [ "${{ needs.deploy-monitoring.result }}" == "success" ]; then
+            echo "### ✅ All layers deployed successfully!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ Some layers failed or were skipped" >> $GITHUB_STEP_SUMMARY
+          fi
