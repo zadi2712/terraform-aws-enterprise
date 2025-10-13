@@ -46,6 +46,59 @@ data "terraform_remote_state" "security" {
 data "aws_caller_identity" "current" {}
 
 ################################################################################
+# ECR Repositories
+################################################################################
+
+# Application repositories
+module "ecr_repositories" {
+  source = "../../../modules/ecr"
+  
+  for_each = var.ecr_repositories
+
+  repository_name      = "${var.project_name}-${var.environment}-${each.key}"
+  image_tag_mutability = each.value.image_tag_mutability
+  
+  # Encryption
+  encryption_type = var.ecr_encryption_type
+  kms_key_arn     = var.ecr_encryption_type == "KMS" ? try(data.terraform_remote_state.security.outputs.kms_key_arn, null) : null
+  
+  # Scanning
+  scan_on_push             = each.value.scan_on_push
+  enable_enhanced_scanning = each.value.enable_enhanced_scanning
+  scan_frequency           = each.value.scan_frequency
+  
+  # Lifecycle
+  max_image_count  = each.value.max_image_count
+  lifecycle_policy = each.value.lifecycle_policy
+  
+  # Access
+  enable_cross_account_access = each.value.enable_cross_account_access
+  allowed_account_ids         = each.value.allowed_account_ids
+  enable_lambda_pull          = each.value.enable_lambda_pull
+  
+  # Replication
+  enable_replication       = each.value.enable_replication
+  replication_destinations = each.value.replication_destinations
+  
+  # Pull through cache
+  enable_pull_through_cache         = each.value.enable_pull_through_cache
+  pull_through_cache_prefix         = each.value.pull_through_cache_prefix
+  upstream_registry_url             = each.value.upstream_registry_url
+  pull_through_cache_credential_arn = each.value.pull_through_cache_credential_arn
+  
+  # Monitoring
+  enable_scan_findings_logging = var.ecr_enable_scan_findings_logging
+  log_retention_days           = var.ecr_log_retention_days
+  
+  tags = merge(
+    var.common_tags,
+    {
+      Application = each.key
+    }
+  )
+}
+
+################################################################################
 # EKS Cluster
 ################################################################################
 
