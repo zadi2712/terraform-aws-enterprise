@@ -3,186 +3,271 @@
 ## Overview
 This document presents a comprehensive, multi-layered architecture diagram following AWS Well-Architected Framework principles across all five pillars: Operational Excellence, Security, Reliability, Performance Efficiency, and Cost Optimization.
 
+### 📖 How to Read This Document
+
+**For better readability, the architecture has been broken down into multiple focused diagrams:**
+
+1. **Request Flow** - See how user requests flow through the system
+2. **Network Architecture** - Understand the VPC layout and Multi-AZ design
+3. **Compute Layer** - View all compute services (ECS, EKS, EC2, Lambda)
+4. **Data Layer** - See databases and storage services
+5. **Security Architecture** - Understand security controls and encryption
+6. **Monitoring & Observability** - View logging and alerting setup
+7. **Complete Architecture** - Simplified view of all components
+8. **Layer Dependencies** - Understand deployment order
+9. **High Availability** - See Multi-AZ failover design
+10. **Disaster Recovery** - View cross-region replication
+
+💡 **Tip:** Each diagram uses **color coding** and **emojis** for easy identification of component types.
+
 ---
 
-## High-Level Architecture Diagram
+## High-Level Architecture Overview
+
+### 1. Request Flow - User to Application
+
+```mermaid
+graph LR
+    A[👥 Users] -->|HTTPS| B[☁️ CloudFront CDN]
+    B -->|"Filter Threats"| C[🛡️ WAF]
+    C --> D[🌐 Route53 DNS]
+    D -->|"Route Traffic"| E[⚖️ Application Load Balancer]
+    E -->|"Distribute"| F[🐳 ECS Tasks/EC2]
+    F -->|"Query"| G[(🗄️ RDS Database)]
+    F -->|"Store/Retrieve"| H[📦 S3 Buckets]
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#ffe1e1
+    style D fill:#e1ffe1
+    style E fill:#f0e1ff
+    style F fill:#e1f0ff
+    style G fill:#ffe1f0
+    style H fill:#f5ffe1
+```
+
+---
+
+### 2. Network Architecture - Multi-AZ VPC Layout
 
 ```mermaid
 graph TB
-    subgraph "Internet"
-        Users[Users/Clients]
-        DevOps[DevOps Engineers]
+    subgraph Internet[🌍 Internet]
+        IGW[Internet Gateway]
     end
-
-    subgraph "AWS Cloud"
-        subgraph "Edge & CDN Layer"
-            CF[CloudFront CDN<br/>Global Edge Locations]
-            R53[Route53 DNS<br/>Health Checks]
-        end
-
-        subgraph "Security Perimeter"
-            WAF[AWS WAF<br/>DDoS Protection]
-            Shield[AWS Shield<br/>Advanced Protection]
-        end
-
-        subgraph "VPC - us-east-1"
-            subgraph "Public Subnets - AZ1 & AZ2"
-                NAT1[NAT Gateway AZ1]
-                NAT2[NAT Gateway AZ2]
-                ALB[Application Load Balancer<br/>Multi-AZ]
-                Bastion[Bastion Host<br/>Session Manager]
+    
+    subgraph VPC[VPC: 10.0.0.0/16]
+        subgraph AZ1[Availability Zone 1]
+            subgraph PubAZ1[Public Subnet<br/>10.0.0.0/24]
+                NAT1[NAT Gateway]
+                ALB1[ALB]
             end
-
-            subgraph "Private Subnets - Application Tier"
-                subgraph "AZ1 - 10.0.4.0/24"
-                    ECS1[ECS Fargate Tasks<br/>Auto-Scaling]
-                    EC21[EC2 Instances<br/>Auto-Scaling Group]
-                    Lambda1[Lambda Functions<br/>VPC Attached]
-                end
-                
-                subgraph "AZ2 - 10.0.5.0/24"
-                    ECS2[ECS Fargate Tasks<br/>Auto-Scaling]
-                    EC22[EC2 Instances<br/>Auto-Scaling Group]
-                    Lambda2[Lambda Functions<br/>VPC Attached]
-                end
+            subgraph PrivAppAZ1[Private App Subnet<br/>10.0.4.0/24]
+                ECS1[ECS Tasks]
+                EC2_1[EC2 Instances]
             end
-
-            subgraph "Private Subnets - Data Tier"
-                subgraph "AZ1 - 10.0.6.0/24"
-                    RDS1[RDS Primary<br/>Multi-AZ]
-                    EFS1[EFS Mount Target]
-                                end
-                
-                subgraph "AZ2 - 10.0.7.0/24"
-                    RDS2[RDS Standby<br/>Read Replica]
-                    EFS2[EFS Mount Target]
-                end
-            end
-
-            subgraph "VPC Endpoints"
-                S3EP[S3 Gateway Endpoint]
-                DDBEP[DynamoDB Gateway Endpoint]
-                ECREP[ECR Interface Endpoint]
-                CWEP[CloudWatch Interface Endpoint]
-                SSMEP[SSM Interface Endpoint]
+            subgraph PrivDataAZ1[Private Data Subnet<br/>10.0.6.0/24]
+                RDS1[(RDS Primary)]
+                EFS1[EFS Mount]
             end
         end
-
-        subgraph "Storage Layer - Regional Services"
-            S3[S3 Buckets<br/>Versioning + Encryption]
-            S3LOG[S3 Access Logs Bucket]
-            S3BACKUP[S3 Backup Bucket<br/>Glacier Lifecycle]
-            EFS[Elastic File System<br/>Multi-AZ]
+        
+        subgraph AZ2[Availability Zone 2]
+            subgraph PubAZ2[Public Subnet<br/>10.0.1.0/24]
+                NAT2[NAT Gateway]
+                ALB2[ALB]
+            end
+            subgraph PrivAppAZ2[Private App Subnet<br/>10.0.5.0/24]
+                ECS2[ECS Tasks]
+                EC2_2[EC2 Instances]
+            end
+            subgraph PrivDataAZ2[Private Data Subnet<br/>10.0.7.0/24]
+                RDS2[(RDS Standby)]
+                EFS2[EFS Mount]
+            end
         end
-
-        subgraph "Database Layer"
-            RDS[(RDS PostgreSQL/MySQL<br/>Multi-AZ + Encryption)]
-            RDSRR[(RDS Read Replicas<br/>Cross-Region)]
-            DDB[(DynamoDB Tables<br/>Global Tables + DAX)]
-            Aurora[(Aurora Serverless<br/>Auto-Scaling)]
-        end
-
-        subgraph "Container & Orchestration"
-            ECR[Elastic Container Registry<br/>Image Scanning]
-            EKS[EKS Cluster<br/>Multi-AZ Node Groups]
-            EKSFG[Fargate Profiles]
-        end
-
-        subgraph "Security Layer"
-            IAM[IAM Roles & Policies<br/>Least Privilege]
-            KMS[KMS Customer Master Keys<br/>Encryption at Rest]
-            SM[Secrets Manager<br/>Rotation Enabled]
-            CIS[AWS Config<br/>Compliance Rules]
-            GT[CloudTrail<br/>API Audit Logs]
-            GD[GuardDuty<br/>Threat Detection]
-            SEC[Security Hub<br/>Centralized Findings]
-        end
-
-        subgraph "Monitoring & Observability Layer"
-            CW[CloudWatch Logs<br/>Log Groups + Insights]
-            CWALARM[CloudWatch Alarms<br/>Multi-Metric]
-            XR[X-Ray Tracing<br/>Distributed Tracing]
-            SNS[SNS Topics<br/>Alert Notifications]
-            CWDASH[CloudWatch Dashboards<br/>Custom Metrics]
-        end
-
-        subgraph "Backup & Disaster Recovery"
-            BACKUP[AWS Backup<br/>Centralized Backups]
-            SNAP[EBS/RDS Snapshots<br/>Automated]
-            REPLICA[Cross-Region Replication]
-        end
-
-        subgraph "CI/CD & Automation"
-            CODEP[CodePipeline<br/>Deployment Pipeline]
-            CODEB[CodeBuild<br/>Build Automation]
-            CODED[CodeDeploy<br/>Blue/Green Deploy]
-            SSM[Systems Manager<br/>Parameter Store]
-        end
+        
+        VPCE[VPC Endpoints<br/>S3 • DynamoDB • ECR]
     end
-
-    %% Connections - User Flow
-    Users -->|HTTPS| CF
-    CF -->|TLS 1.3| WAF
-    WAF --> Shield
-    Shield --> R53
-    R53 -->|DNS Resolution| ALB
-
-    %% Application Tier Connections
-    ALB -->|HTTP/HTTPS| ECS1
-    ALB -->|HTTP/HTTPS| ECS2
-    ALB -->|HTTP/HTTPS| EC21
-    ALB -->|HTTP/HTTPS| EC22
-
-    %% NAT Gateway for Outbound
-    ECS1 -->|Outbound| NAT1
-    ECS2 -->|Outbound| NAT2
-    EC21 -->|Outbound| NAT1
-    EC22 -->|Outbound| NAT2
-
-    %% Database Connections
-    ECS1 -.->|Private Connection| RDS1
-    ECS2 -.->|Private Connection| RDS1
-    EC21 -.->|Private Connection| RDS1
-    EC22 -.->|Private Connection| RDS1
-    RDS1 -.->|Replication| RDS2
-    RDS1 -.->|Cross-Region| RDSRR
-
-    %% Storage Connections
-    ECS1 -.->|Via Endpoint| S3
-    ECS2 -.->|Via Endpoint| S3
-    Lambda1 -.->|Via Endpoint| DDB
-    Lambda2 -.->|Via Endpoint| DDB
-    EC21 -.->|NFS| EFS1
-    EC22 -.->|NFS| EFS2
-
-    %% Container Registry
-    ECS1 -.->|Pull Images| ECR
-    ECS2 -.->|Pull Images| ECR
-    EKS -.->|Pull Images| ECR
-
-    %% Security Connections
-    IAM -.->|Authorization| ECS1
-    IAM -.->|Authorization| Lambda1
-    KMS -.->|Encryption| RDS1
-    KMS -.->|Encryption| S3
-    KMS -.->|Encryption| EFS
-    SM -.->|Secrets| ECS1
-    GT -.->|Audit Logs| S3LOG
-
-    %% Monitoring Connections
-    ECS1 -->|Logs/Metrics| CW
-    ECS2 -->|Logs/Metrics| CW
-    EC21 -->|Logs/Metrics| CW
-    EC22 -->|Logs/Metrics| CW
-    Lambda1 -->|Traces| XR
-    CW -->|Alerts| SNS
-    CWALARM -->|Notifications| SNS
-
-    %% Management Access
-    DevOps -->|SSM Session| Bastion
-    DevOps -->|SSM Session| EC21
-    Bastion -.->|Private Access| EC21
+    
+    IGW -->|"Public Access"| PubAZ1
+    IGW -->|"Public Access"| PubAZ2
+    ALB1 & ALB2 -->|"Route Traffic"| ECS1 & ECS2 & EC2_1 & EC2_2
+    ECS1 & ECS2 -->|"Outbound via NAT"| NAT1 & NAT2
+    EC2_1 & EC2_2 -->|"Database Access"| RDS1
+    RDS1 -.->|"Replication"| RDS2
+    
+    style VPC fill:#e8f4f8
+    style AZ1 fill:#fff9e6
+    style AZ2 fill:#fff9e6
 ```
+
+---
+
+### 3. Compute Layer Architecture
+
+```mermaid
+graph LR
+    subgraph ContainerServices[Container Services]
+        ECR[📦 ECR<br/>Container Registry]
+        ECS[🐳 ECS Fargate<br/>Serverless Containers]
+        EKS[☸️ EKS<br/>Kubernetes]
+    end
+    
+    subgraph TraditionalCompute[Traditional Compute]
+        EC2[💻 EC2<br/>Auto Scaling Groups]
+        Lambda[⚡ Lambda<br/>Serverless Functions]
+    end
+    
+    subgraph LoadBalancing[Load Balancing]
+        ALB[⚖️ ALB<br/>Application Load Balancer]
+    end
+    
+    ECR -->|"Pull Images"| ECS
+    ECR -->|"Pull Images"| EKS
+    ALB -->|"Route Traffic"| ECS
+    ALB -->|"Route Traffic"| EC2
+    ALB -->|"Invoke"| Lambda
+    
+    style ContainerServices fill:#e3f2fd
+    style TraditionalCompute fill:#f3e5f5
+    style LoadBalancing fill:#e8f5e9
+```
+
+---
+
+### 4. Data Layer Architecture
+
+```mermaid
+graph TB
+    subgraph Databases[Databases]
+        RDS[(🗄️ RDS Multi-AZ<br/>PostgreSQL/MySQL)]
+        DDB[(⚡ DynamoDB<br/>NoSQL + Global Tables)]
+        Aurora[(🌟 Aurora Serverless<br/>Auto-Scaling)]
+    end
+    
+    subgraph Storage[Storage Services]
+        S3[📦 S3 Buckets<br/>Standard → IA → Glacier]
+        EFS[📁 EFS<br/>Shared File System]
+        Backup[💾 AWS Backup<br/>Automated Snapshots]
+    end
+    
+    subgraph Caching[Caching Layer]
+        DAX[⚡ DAX<br/>DynamoDB Accelerator]
+    end
+    
+    DDB --> DAX
+    RDS -->|"Backup"| Backup
+    S3 -->|"Backup"| Backup
+    EFS -->|"Backup"| Backup
+    
+    style Databases fill:#fff3e0
+    style Storage fill:#e8f5e9
+    style Caching fill:#fce4ec
+```
+
+---
+
+### 5. Security Architecture
+
+```mermaid
+graph LR
+    subgraph Identity[Identity & Access]
+        IAM[👤 IAM<br/>Roles & Policies]
+        SM[🔐 Secrets Manager<br/>Credential Rotation]
+    end
+    
+    subgraph Encryption[Encryption]
+        KMS[🔑 KMS<br/>Encryption Keys]
+    end
+    
+    subgraph ThreatDetection[Threat Detection]
+        GD[🛡️ GuardDuty<br/>Threat Detection]
+        SH[📊 Security Hub<br/>Compliance Dashboard]
+        WAF[🔥 WAF<br/>Web Protection]
+    end
+    
+    subgraph Compliance[Compliance & Audit]
+        CT[📝 CloudTrail<br/>API Audit Logs]
+        Config[✅ AWS Config<br/>Resource Compliance]
+    end
+    
+    IAM -->|"Authorize"| SM
+    KMS -->|"Encrypt"| SM
+    GD & WAF -->|"Findings"| SH
+    CT -->|"Logs"| SH
+    Config -->|"Compliance"| SH
+    
+    style Identity fill:#e3f2fd
+    style Encryption fill:#fff9c4
+    style ThreatDetection fill:#ffebee
+    style Compliance fill:#f3e5f5
+```
+
+---
+
+### 6. Monitoring & Observability
+
+```mermaid
+graph TB
+    subgraph Sources[Data Sources]
+        APP[🐳 Applications<br/>ECS/EC2/Lambda]
+        DB[(🗄️ Databases<br/>RDS/DynamoDB)]
+        NET[🌐 Network<br/>VPC Flow Logs]
+    end
+    
+    subgraph Monitoring[Monitoring Platform]
+        CW[📊 CloudWatch<br/>Logs & Metrics]
+        XRay[🔍 X-Ray<br/>Distributed Tracing]
+    end
+    
+    subgraph Alerting[Alerting]
+        Alarms[⚠️ CloudWatch Alarms]
+        SNS[📧 SNS Topics<br/>Notifications]
+    end
+    
+    subgraph Visualization[Dashboards]
+        Dash[📈 CloudWatch Dashboards]
+    end
+    
+    APP & DB & NET -->|"Send Metrics"| CW
+    APP -->|"Send Traces"| XRay
+    CW -->|"Trigger"| Alarms
+    Alarms -->|"Notify"| SNS
+    CW & XRay -->|"Display"| Dash
+    
+    style Sources fill:#e8f5e9
+    style Monitoring fill:#e3f2fd
+    style Alerting fill:#ffebee
+    style Visualization fill:#f3e5f5
+```
+
+---
+
+## 📊 Quick Navigation Guide
+
+### Which Diagram Should I Look At?
+
+| Your Question | Diagram to View | Section |
+|---------------|----------------|---------|
+| How do user requests flow? | Request Flow | Diagram #1 |
+| What does the VPC layout look like? | Network Architecture | Diagram #2 |
+| What compute services are used? | Compute Layer | Diagram #3 |
+| How is data stored? | Data Layer | Diagram #4 |
+| How is security implemented? | Security Architecture | Diagram #5 |
+| How do we monitor the system? | Monitoring & Observability | Diagram #6 |
+| I need a simplified overview | Complete Architecture | Diagram #7 |
+| What order do I deploy in? | Layer Dependencies | Diagram #8 |
+| How does failover work? | High Availability | Diagram #9 |
+| What's the DR strategy? | Disaster Recovery | Diagram #10 |
+
+### Diagram Features
+
+✅ **Color-coded** for easy component identification  
+✅ **Emoji icons** for quick visual recognition  
+✅ **Left-to-right or top-to-bottom** layouts for readability  
+✅ **Focused views** - each diagram shows one aspect clearly  
+✅ **Connection labels** explain relationships between components  
 
 ---
 
@@ -1273,3 +1358,181 @@ The architecture is designed to:
 **Last Updated:** October 13, 2025  
 **Author:** Enterprise Architecture Team  
 **Review Cycle:** Quarterly
+
+### 7. Complete Architecture - Simplified View
+
+```mermaid
+graph TB
+    User[👥 End Users]
+    
+    subgraph Edge[Edge Services]
+        CF[CloudFront CDN]
+        R53[Route53]
+        WAF[WAF/Shield]
+    end
+    
+    subgraph Compute[Compute Layer]
+        ALB[Load Balancer]
+        ECS[ECS Fargate]
+        EC2[EC2 Auto Scaling]
+        Lambda[Lambda Functions]
+        EKS[EKS Cluster]
+    end
+    
+    subgraph Data[Data Layer]
+        RDS[(RDS Multi-AZ)]
+        DDB[(DynamoDB)]
+        S3[S3 Storage]
+        EFS[EFS Storage]
+    end
+    
+    subgraph Security[Security Layer]
+        IAM[IAM]
+        KMS[KMS]
+        Secrets[Secrets Manager]
+        GuardDuty[GuardDuty]
+    end
+    
+    subgraph Monitoring[Monitoring Layer]
+        CloudWatch[CloudWatch]
+        XRay[X-Ray]
+        SNS[SNS Alerts]
+    end
+    
+    User -->|HTTPS| Edge
+    Edge -->|Route| Compute
+    Compute -->|Read/Write| Data
+    Security -.->|Protect| Compute
+    Security -.->|Encrypt| Data
+    Monitoring -.->|Monitor| Compute
+    Monitoring -.->|Monitor| Data
+    
+    style Edge fill:#ffe0b2
+    style Compute fill:#bbdefb
+    style Data fill:#c8e6c9
+    style Security fill:#ffccbc
+    style Monitoring fill:#e1bee7
+```
+
+---
+
+### 8. Layer Dependencies - Deployment Order
+
+```mermaid
+graph TD
+    L1[Layer 1: Foundation<br/>Regions • AZs]
+    L2[Layer 2: Networking<br/>VPC • Subnets • Gateways]
+    L3[Layer 3: Security<br/>IAM • KMS • Secrets]
+    L4[Layer 4: Storage<br/>S3 • EFS]
+    L5[Layer 5: Database<br/>RDS • DynamoDB]
+    L6[Layer 6: Compute<br/>ECS • EC2 • Lambda • ALB]
+    L7[Layer 7: Monitoring<br/>CloudWatch • X-Ray • SNS]
+    
+    L1 --> L2
+    L2 --> L3
+    L3 --> L4
+    L3 --> L5
+    L4 & L5 --> L6
+    L6 --> L7
+    
+    style L1 fill:#f3e5f5
+    style L2 fill:#e1f5fe
+    style L3 fill:#fff3e0
+    style L4 fill:#f1f8e9
+    style L5 fill:#fce4ec
+    style L6 fill:#e8eaf6
+    style L7 fill:#fff9c4
+```
+
+---
+
+### 9. High Availability Design
+
+```mermaid
+graph LR
+    subgraph AZ1[Availability Zone 1]
+        ALB1[ALB Target]
+        NAT1[NAT GW]
+        APP1[App Instances]
+        RDS_P[(RDS Primary)]
+    end
+    
+    subgraph AZ2[Availability Zone 2]
+        ALB2[ALB Target]
+        NAT2[NAT GW]
+        APP2[App Instances]
+        RDS_S[(RDS Standby)]
+    end
+    
+    Users[Users] --> ALB1 & ALB2
+    ALB1 --> APP1
+    ALB2 --> APP2
+    APP1 & APP2 --> RDS_P
+    RDS_P -.->|Sync Replication| RDS_S
+    APP1 -->|Outbound| NAT1
+    APP2 -->|Outbound| NAT2
+    
+    style AZ1 fill:#e3f2fd
+    style AZ2 fill:#e8f5e9
+```
+
+---
+
+### 10. Disaster Recovery Flow
+
+```mermaid
+graph LR
+    subgraph Primary[Primary Region: us-east-1]
+        P_APP[Applications]
+        P_RDS[(RDS Primary)]
+        P_S3[S3 Buckets]
+        P_DDB[(DynamoDB)]
+    end
+    
+    subgraph DR[DR Region: us-west-2]
+        DR_APP[Standby Apps]
+        DR_RDS[(RDS Replica)]
+        DR_S3[S3 Replicas]
+        DR_DDB[(DynamoDB Global)]
+    end
+    
+    P_RDS -.->|Async Replication| DR_RDS
+    P_S3 -.->|Cross-Region Replication| DR_S3
+    P_DDB <-.->|Global Tables| DR_DDB
+    
+    R53[Route53 Failover]
+    R53 -->|Active| Primary
+    R53 -.->|Failover| DR
+    
+    style Primary fill:#c8e6c9
+    style DR fill:#ffccbc
+```
+
+---
+
+## Diagram Legend
+
+### Node Types
+- 🐳 **Containers** - ECS, EKS, Docker
+- 💻 **Virtual Machines** - EC2 instances
+- ⚡ **Serverless** - Lambda, Fargate
+- 🗄️ **Databases** - RDS, DynamoDB, Aurora
+- 📦 **Storage** - S3, EFS, EBS
+- 🔐 **Security** - IAM, KMS, WAF
+- 📊 **Monitoring** - CloudWatch, X-Ray
+- ⚖️ **Load Balancing** - ALB, NLB
+- 🌐 **Networking** - VPC, Route53, CloudFront
+
+### Connection Types
+- **Solid arrows (→)** - Active data flow
+- **Dashed arrows (-.->)** - Control/management plane
+- **Bold text** - Primary services
+- **Light colors** - Logical groupings
+
+### Color Coding
+- 🔵 **Blue shades** - Compute resources
+- 🟢 **Green shades** - Data storage
+- 🟡 **Yellow shades** - Security components
+- 🟣 **Purple shades** - Monitoring tools
+- 🟠 **Orange shades** - Edge services
+
