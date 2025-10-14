@@ -241,12 +241,109 @@ jobs:
           echo "- 📋 Plan: \`${{ steps.plan.outcome }}\`" >> $GITHUB_STEP_SUMMARY
           if [[ "${{ inputs.action }}" == "apply" ]]; then
             echo "- 🚀 Apply: \`${{ steps.apply.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- 📤 Export Outputs: \`${{ steps.export_outputs.outcome }}\`" >> $GITHUB_STEP_SUMMARY
           elif [[ "${{ inputs.action }}" == "destroy" ]]; then
             echo "- 🗑️ Destroy: \`${{ steps.destroy.outcome }}\`" >> $GITHUB_STEP_SUMMARY
           fi
       
       # ============================================================================
-      # STEP 13: Cleanup on Failure
+      # STEP 13: Export Terraform Outputs (After Successful Apply)
+      # ============================================================================
+      - name: 📤 Export Terraform Outputs
+        id: export_outputs
+        if: inputs.action == 'apply' && steps.apply.outcome == 'success'
+        run: |
+          echo "Exporting Terraform outputs for ${{ inputs.layer }} layer..."
+          
+          # Create outputs directory
+          mkdir -p "${{ github.workspace }}/outputs"
+          
+          # Export outputs to JSON file
+          OUTPUT_FILE="${{ github.workspace }}/outputs/${{ inputs.environment }}-${{ inputs.layer }}-outputs.json"
+          terraform output -json > "$OUTPUT_FILE" 2>/dev/null || echo "{}" > "$OUTPUT_FILE"
+          
+          # Display summary
+          if [ -s "$OUTPUT_FILE" ]; then
+            echo "✅ Outputs exported successfully to: outputs/${{ inputs.environment }}-${{ inputs.layer }}-outputs.json"
+            echo "File size: $(du -h "$OUTPUT_FILE" | cut -f1)"
+            echo "Number of outputs: $(jq 'length' "$OUTPUT_FILE" 2>/dev/null || echo "0")"
+            echo ""
+            echo "Output keys:"
+            jq -r 'keys[]' "$OUTPUT_FILE" 2>/dev/null || echo "No outputs available"
+          else
+            echo "⚠️ No outputs found for this layer"
+          fi
+        continue-on-error: true
+        env:
+          TF_INPUT: false
+      
+      # ============================================================================
+      # STEP 14: Upload Outputs as Artifact
+      # ============================================================================
+      - name: 📦 Upload Outputs Artifact
+        if: steps.export_outputs.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-outputs-${{ inputs.layer }}-${{ inputs.environment }}-${{ github.run_number }}
+          path: outputs/${{ inputs.environment }}-${{ inputs.layer }}-outputs.json
+          retention-days: 90
+          if-no-files-found: warn
+      
+      # ============================================================================
+      # STEP 15: Commit Outputs to Repository (Optional)
+      # ============================================================================
+      - name: 💾 Commit Outputs to Repository
+        if: steps.export_outputs.outcome == 'success' && github.event_name != 'pull_request'
+        run: |
+          echo "Committing outputs to repository..."
+          
+          # Configure git
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # Add outputs file
+          git add outputs/${{ inputs.environment }}-${{ inputs.layer }}-outputs.json
+          
+          # Check if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            # Commit changes
+            git commit -m "chore: update ${{ inputs.environment }}-${{ inputs.layer }} outputs [skip ci]"
+            
+            # Push changes
+            git push origin HEAD:${{ github.ref_name }} || echo "Failed to push, continuing..."
+            
+            echo "✅ Outputs committed and pushed to repository"
+          fi
+        continue-on-error: true
+      
+      # ============================================================================
+      # STEP 16: Add Outputs to Job Summary
+      # ============================================================================
+      - name: 📊 Add Outputs to Summary
+        if: steps.export_outputs.outcome == 'success'
+        run: |
+          echo "## 📤 Terraform Outputs" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**File:** \`outputs/${{ inputs.environment }}-${{ inputs.layer }}-outputs.json\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          OUTPUT_FILE="outputs/${{ inputs.environment }}-${{ inputs.layer }}-outputs.json"
+          
+          if [ -f "$OUTPUT_FILE" ] && [ -s "$OUTPUT_FILE" ]; then
+            echo "### Output Values" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+            jq '.' "$OUTPUT_FILE" 2>/dev/null >> $GITHUB_STEP_SUMMARY || echo "{}" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "_No outputs available for this layer_" >> $GITHUB_STEP_SUMMARY
+          fi
+        continue-on-error: true
+      
+      # ============================================================================
+      # STEP 17: Cleanup on Failure
       # ============================================================================
       - name: 🧹 Cleanup on Failure
         if: failure()
