@@ -103,3 +103,39 @@ module "rds" {
 
   tags = var.common_tags
 }
+
+
+################################################################################
+# Store Outputs in SSM Parameter Store
+################################################################################
+
+module "ssm_outputs" {
+  source = "../../../modules/ssm-outputs"
+
+  project_name = var.project_name
+  environment  = var.environment
+  layer_name   = "database"
+
+  outputs = {
+    rds_endpoint             = var.create_rds ? module.rds[0].db_instance_endpoint : null
+    rds_instance_id          = var.create_rds ? module.rds[0].db_instance_id : null
+    rds_security_group_id    = module.rds_security_group.security_group_id
+    database_name            = var.create_rds ? var.database_name : null
+    master_username          = var.create_rds ? var.master_username : null
+  }
+
+  output_descriptions = {
+    rds_endpoint          = "RDS PostgreSQL endpoint for database connections"
+    rds_instance_id       = "RDS instance identifier"
+    rds_security_group_id = "Security group ID for RDS database access"
+    database_name         = "Database name"
+    master_username       = "Database master username"
+  }
+
+  tags = var.common_tags
+
+  depends_on = [
+    module.rds,
+    module.rds_security_group
+  ]
+}

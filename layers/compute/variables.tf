@@ -29,6 +29,53 @@ variable "common_tags" {
 }
 
 ################################################################################
+# ECR Configuration
+################################################################################
+
+variable "ecr_repositories" {
+  description = "Map of ECR repositories to create"
+  type = map(object({
+    image_tag_mutability         = optional(string, "MUTABLE")
+    scan_on_push                 = optional(bool, true)
+    enable_enhanced_scanning     = optional(bool, false)
+    scan_frequency               = optional(string, "SCAN_ON_PUSH")
+    max_image_count              = optional(number, 100)
+    lifecycle_policy             = optional(string, null)
+    enable_cross_account_access  = optional(bool, false)
+    allowed_account_ids          = optional(list(string), [])
+    enable_lambda_pull           = optional(bool, false)
+    enable_replication           = optional(bool, false)
+    replication_destinations     = optional(list(object({
+      region      = string
+      registry_id = string
+    })), [])
+    enable_pull_through_cache         = optional(bool, false)
+    pull_through_cache_prefix         = optional(string, "ecr-public")
+    upstream_registry_url             = optional(string, "public.ecr.aws")
+    pull_through_cache_credential_arn = optional(string, null)
+  }))
+  default = {}
+}
+
+variable "ecr_encryption_type" {
+  description = "Encryption type for ECR repositories (AES256 or KMS)"
+  type        = string
+  default     = "AES256"
+}
+
+variable "ecr_enable_scan_findings_logging" {
+  description = "Enable CloudWatch logging for ECR scan findings"
+  type        = bool
+  default     = false
+}
+
+variable "ecr_log_retention_days" {
+  description = "Number of days to retain ECR scan findings logs"
+  type        = number
+  default     = 30
+}
+
+################################################################################
 # Feature Toggles
 ################################################################################
 

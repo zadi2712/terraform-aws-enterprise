@@ -4,6 +4,38 @@
 ################################################################################
 
 ################################################################################
+# ECR Outputs
+################################################################################
+
+output "ecr_repository_urls" {
+  description = "Map of ECR repository URLs"
+  value = {
+    for k, v in module.ecr_repositories : k => v.repository_url
+  }
+}
+
+output "ecr_repository_arns" {
+  description = "Map of ECR repository ARNs"
+  value = {
+    for k, v in module.ecr_repositories : k => v.repository_arn
+  }
+}
+
+output "ecr_repository_names" {
+  description = "Map of ECR repository names"
+  value = {
+    for k, v in module.ecr_repositories : k => v.repository_name
+  }
+}
+
+output "ecr_registry_ids" {
+  description = "Map of ECR registry IDs"
+  value = {
+    for k, v in module.ecr_repositories : k => v.repository_registry_id
+  }
+}
+
+################################################################################
 # EKS Outputs
 ################################################################################
 
@@ -143,4 +175,30 @@ output "bastion_public_ip" {
 output "bastion_security_group_id" {
   description = "Bastion security group ID"
   value       = var.enable_bastion ? module.bastion_security_group[0].security_group_id : null
+}
+
+
+################################################################################
+# ECR SSM Parameter Store Outputs
+################################################################################
+
+output "ecr_ssm_parameters" {
+  description = "Map of SSM Parameter Store paths for all ECR repositories"
+  value = {
+    for k, v in module.ecr_repositories : k => v.ssm_parameters
+  }
+}
+
+output "ecr_ssm_parameter_urls" {
+  description = "Map of SSM Parameter paths for repository URLs"
+  value = {
+    for k, v in module.ecr_repositories : k => v.ssm_parameter_repository_url
+  }
+}
+
+output "ecr_ssm_parameter_arns" {
+  description = "Map of SSM Parameter paths for repository ARNs"
+  value = {
+    for k, v in module.ecr_repositories : k => v.ssm_parameter_repository_arn
+  }
 }

@@ -1,0 +1,629 @@
+name: Branch-Based Auto Deployment
+
+# Automatically deploy to environments based on branch
+# - main branch → prod + uat environments
+# - dev branch → dev environment
+# - staging branch → qa environment
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - staging
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+
+# Prevent concurrent deployments to the same environment
+concurrency:
+  group: auto-deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  # ============================================================================
+  # DETERMINE ENVIRONMENTS: Map branch to target environment(s)
+  # ============================================================================
+  determine-environments:
+    name: 🎯 Determine Target Environments
+    runs-on: ubuntu-latest
+    outputs:
+      environments: ${{ steps.set-envs.outputs.environments }}
+      deploy_to_prod: ${{ steps.set-envs.outputs.deploy_to_prod }}
+      deploy_to_uat: ${{ steps.set-envs.outputs.deploy_to_uat }}
+      deploy_to_dev: ${{ steps.set-envs.outputs.deploy_to_dev }}
+      deploy_to_qa: ${{ steps.set-envs.outputs.deploy_to_qa }}
+    steps:
+      - name: Set Target Environments
+        id: set-envs
+        run: |
+          echo "Branch: ${{ github.ref_name }}"
+          
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            echo "🎯 main branch detected → Deploying to PROD + UAT"
+            echo "environments=[\"prod\", \"uat\"]" >> $GITHUB_OUTPUT
+            echo "deploy_to_prod=true" >> $GITHUB_OUTPUT
+            echo "deploy_to_uat=true" >> $GITHUB_OUTPUT
+            echo "deploy_to_dev=false" >> $GITHUB_OUTPUT
+            echo "deploy_to_qa=false" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref_name }}" == "dev" ]; then
+            echo "🎯 dev branch detected → Deploying to DEV"
+            echo "environments=[\"dev\"]" >> $GITHUB_OUTPUT
+            echo "deploy_to_prod=false" >> $GITHUB_OUTPUT
+            echo "deploy_to_uat=false" >> $GITHUB_OUTPUT
+            echo "deploy_to_dev=true" >> $GITHUB_OUTPUT
+            echo "deploy_to_qa=false" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref_name }}" == "staging" ]; then
+            echo "🎯 staging branch detected → Deploying to QA"
+            echo "environments=[\"qa\"]" >> $GITHUB_OUTPUT
+            echo "deploy_to_prod=false" >> $GITHUB_OUTPUT
+            echo "deploy_to_uat=false" >> $GITHUB_OUTPUT
+            echo "deploy_to_dev=false" >> $GITHUB_OUTPUT
+            echo "deploy_to_qa=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Unknown branch: ${{ github.ref_name }}"
+            exit 1
+          fi
+
+  # ============================================================================
+  # PRODUCTION DEPLOYMENT (from main branch)
+  # ============================================================================
+  
+  # Layer 1: Networking - PROD
+  deploy-networking-prod:
+    name: 1️⃣ Deploy Networking to PROD
+    needs: [determine-environments]
+    if: needs.determine-environments.outputs.deploy_to_prod == 'true'
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: networking
+      environment: prod
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 2: Security - PROD
+  deploy-security-prod:
+    name: 2️⃣ Deploy Security to PROD
+    needs: [determine-environments, deploy-networking-prod]
+    if: needs.determine-environments.outputs.deploy_to_prod == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: security
+      environment: prod
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 3: Storage - PROD
+  deploy-storage-prod:
+    name: 3️⃣ Deploy Storage to PROD
+    needs: [determine-environments, deploy-security-prod]
+    if: needs.determine-environments.outputs.deploy_to_prod == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: storage
+      environment: prod
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 4: Database - PROD
+  deploy-database-prod:
+    name: 4️⃣ Deploy Database to PROD
+    needs: [determine-environments, deploy-storage-prod]
+    if: needs.determine-environments.outputs.deploy_to_prod == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: database
+      environment: prod
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 5: Compute - PROD
+  deploy-compute-prod:
+    name: 5️⃣ Deploy Compute to PROD
+    needs: [determine-environments, deploy-database-prod]
+    if: needs.determine-environments.outputs.deploy_to_prod == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: compute
+      environment: prod
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 6: DNS - PROD
+  deploy-dns-prod:
+    name: 6️⃣ Deploy DNS to PROD
+    needs: [determine-environments, deploy-compute-prod]
+    if: needs.determine-environments.outputs.deploy_to_prod == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: dns
+      environment: prod
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 7: Monitoring - PROD
+  deploy-monitoring-prod:
+    name: 7️⃣ Deploy Monitoring to PROD
+    needs: [determine-environments, deploy-dns-prod]
+    if: needs.determine-environments.outputs.deploy_to_prod == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: monitoring
+      environment: prod
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+
+  # ============================================================================
+  # UAT DEPLOYMENT (from main branch)
+  # ============================================================================
+  
+  # Layer 1: Networking - UAT
+  deploy-networking-uat:
+    name: 1️⃣ Deploy Networking to UAT
+    needs: [determine-environments]
+    if: needs.determine-environments.outputs.deploy_to_uat == 'true'
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: networking
+      environment: uat
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 2: Security - UAT
+  deploy-security-uat:
+    name: 2️⃣ Deploy Security to UAT
+    needs: [determine-environments, deploy-networking-uat]
+    if: needs.determine-environments.outputs.deploy_to_uat == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: security
+      environment: uat
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 3: Storage - UAT
+  deploy-storage-uat:
+    name: 3️⃣ Deploy Storage to UAT
+    needs: [determine-environments, deploy-security-uat]
+    if: needs.determine-environments.outputs.deploy_to_uat == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: storage
+      environment: uat
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 4: Database - UAT
+  deploy-database-uat:
+    name: 4️⃣ Deploy Database to UAT
+    needs: [determine-environments, deploy-storage-uat]
+    if: needs.determine-environments.outputs.deploy_to_uat == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: database
+      environment: uat
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 5: Compute - UAT
+  deploy-compute-uat:
+    name: 5️⃣ Deploy Compute to UAT
+    needs: [determine-environments, deploy-database-uat]
+    if: needs.determine-environments.outputs.deploy_to_uat == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: compute
+      environment: uat
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 6: DNS - UAT
+  deploy-dns-uat:
+    name: 6️⃣ Deploy DNS to UAT
+    needs: [determine-environments, deploy-compute-uat]
+    if: needs.determine-environments.outputs.deploy_to_uat == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: dns
+      environment: uat
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 7: Monitoring - UAT
+  deploy-monitoring-uat:
+    name: 7️⃣ Deploy Monitoring to UAT
+    needs: [determine-environments, deploy-dns-uat]
+    if: needs.determine-environments.outputs.deploy_to_uat == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: monitoring
+      environment: uat
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+
+  # ============================================================================
+  # DEV DEPLOYMENT (from dev branch)
+  # ============================================================================
+  
+  # Layer 1: Networking - DEV
+  deploy-networking-dev:
+    name: 1️⃣ Deploy Networking to DEV
+    needs: [determine-environments]
+    if: needs.determine-environments.outputs.deploy_to_dev == 'true'
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: networking
+      environment: dev
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 2: Security - DEV
+  deploy-security-dev:
+    name: 2️⃣ Deploy Security to DEV
+    needs: [determine-environments, deploy-networking-dev]
+    if: needs.determine-environments.outputs.deploy_to_dev == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: security
+      environment: dev
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 3: Storage - DEV
+  deploy-storage-dev:
+    name: 3️⃣ Deploy Storage to DEV
+    needs: [determine-environments, deploy-security-dev]
+    if: needs.determine-environments.outputs.deploy_to_dev == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: storage
+      environment: dev
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 4: Database - DEV
+  deploy-database-dev:
+    name: 4️⃣ Deploy Database to DEV
+    needs: [determine-environments, deploy-storage-dev]
+    if: needs.determine-environments.outputs.deploy_to_dev == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: database
+      environment: dev
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 5: Compute - DEV
+  deploy-compute-dev:
+    name: 5️⃣ Deploy Compute to DEV
+    needs: [determine-environments, deploy-database-dev]
+    if: needs.determine-environments.outputs.deploy_to_dev == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: compute
+      environment: dev
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 6: DNS - DEV
+  deploy-dns-dev:
+    name: 6️⃣ Deploy DNS to DEV
+    needs: [determine-environments, deploy-compute-dev]
+    if: needs.determine-environments.outputs.deploy_to_dev == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: dns
+      environment: dev
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 7: Monitoring - DEV
+  deploy-monitoring-dev:
+    name: 7️⃣ Deploy Monitoring to DEV
+    needs: [determine-environments, deploy-dns-dev]
+    if: needs.determine-environments.outputs.deploy_to_dev == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: monitoring
+      environment: dev
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+
+  # ============================================================================
+  # QA DEPLOYMENT (from staging branch)
+  # ============================================================================
+  
+  # Layer 1: Networking - QA
+  deploy-networking-qa:
+    name: 1️⃣ Deploy Networking to QA
+    needs: [determine-environments]
+    if: needs.determine-environments.outputs.deploy_to_qa == 'true'
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: networking
+      environment: qa
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 2: Security - QA
+  deploy-security-qa:
+    name: 2️⃣ Deploy Security to QA
+    needs: [determine-environments, deploy-networking-qa]
+    if: needs.determine-environments.outputs.deploy_to_qa == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: security
+      environment: qa
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 3: Storage - QA
+  deploy-storage-qa:
+    name: 3️⃣ Deploy Storage to QA
+    needs: [determine-environments, deploy-security-qa]
+    if: needs.determine-environments.outputs.deploy_to_qa == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: storage
+      environment: qa
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 4: Database - QA
+  deploy-database-qa:
+    name: 4️⃣ Deploy Database to QA
+    needs: [determine-environments, deploy-storage-qa]
+    if: needs.determine-environments.outputs.deploy_to_qa == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: database
+      environment: qa
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 5: Compute - QA
+  deploy-compute-qa:
+    name: 5️⃣ Deploy Compute to QA
+    needs: [determine-environments, deploy-database-qa]
+    if: needs.determine-environments.outputs.deploy_to_qa == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: compute
+      environment: qa
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 6: DNS - QA
+  deploy-dns-qa:
+    name: 6️⃣ Deploy DNS to QA
+    needs: [determine-environments, deploy-compute-qa]
+    if: needs.determine-environments.outputs.deploy_to_qa == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: dns
+      environment: qa
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+  
+  # Layer 7: Monitoring - QA
+  deploy-monitoring-qa:
+    name: 7️⃣ Deploy Monitoring to QA
+    needs: [determine-environments, deploy-dns-qa]
+    if: needs.determine-environments.outputs.deploy_to_qa == 'true' && !cancelled()
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      layer: monitoring
+      environment: qa
+      action: apply
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+
+  # ============================================================================
+  # DEPLOYMENT SUMMARY
+  # ============================================================================
+  deployment-summary:
+    name: 📊 Deployment Summary
+    needs: 
+      - determine-environments
+      # PROD jobs
+      - deploy-networking-prod
+      - deploy-security-prod
+      - deploy-storage-prod
+      - deploy-database-prod
+      - deploy-compute-prod
+      - deploy-dns-prod
+      - deploy-monitoring-prod
+      # UAT jobs
+      - deploy-networking-uat
+      - deploy-security-uat
+      - deploy-storage-uat
+      - deploy-database-uat
+      - deploy-compute-uat
+      - deploy-dns-uat
+      - deploy-monitoring-uat
+      # DEV jobs
+      - deploy-networking-dev
+      - deploy-security-dev
+      - deploy-storage-dev
+      - deploy-database-dev
+      - deploy-compute-dev
+      - deploy-dns-dev
+      - deploy-monitoring-dev
+      # QA jobs
+      - deploy-networking-qa
+      - deploy-security-qa
+      - deploy-storage-qa
+      - deploy-database-qa
+      - deploy-compute-qa
+      - deploy-dns-qa
+      - deploy-monitoring-qa
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Deployment Report
+        run: |
+          echo "## 🚀 Branch-Based Auto Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # PROD Environment
+          if [ "${{ needs.determine-environments.outputs.deploy_to_prod }}" == "true" ]; then
+            echo "### 🏭 Production Environment" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Layer | Status |" >> $GITHUB_STEP_SUMMARY
+            echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+            echo "| 1️⃣ Networking | ${{ needs.deploy-networking-prod.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 2️⃣ Security | ${{ needs.deploy-security-prod.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 3️⃣ Storage | ${{ needs.deploy-storage-prod.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 4️⃣ Database | ${{ needs.deploy-database-prod.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 5️⃣ Compute | ${{ needs.deploy-compute-prod.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 6️⃣ DNS | ${{ needs.deploy-dns-prod.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 7️⃣ Monitoring | ${{ needs.deploy-monitoring-prod.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # UAT Environment
+          if [ "${{ needs.determine-environments.outputs.deploy_to_uat }}" == "true" ]; then
+            echo "### 🧪 UAT Environment" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Layer | Status |" >> $GITHUB_STEP_SUMMARY
+            echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+            echo "| 1️⃣ Networking | ${{ needs.deploy-networking-uat.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 2️⃣ Security | ${{ needs.deploy-security-uat.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 3️⃣ Storage | ${{ needs.deploy-storage-uat.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 4️⃣ Database | ${{ needs.deploy-database-uat.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 5️⃣ Compute | ${{ needs.deploy-compute-uat.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 6️⃣ DNS | ${{ needs.deploy-dns-uat.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 7️⃣ Monitoring | ${{ needs.deploy-monitoring-uat.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # DEV Environment
+          if [ "${{ needs.determine-environments.outputs.deploy_to_dev }}" == "true" ]; then
+            echo "### 🔧 Development Environment" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Layer | Status |" >> $GITHUB_STEP_SUMMARY
+            echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+            echo "| 1️⃣ Networking | ${{ needs.deploy-networking-dev.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 2️⃣ Security | ${{ needs.deploy-security-dev.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 3️⃣ Storage | ${{ needs.deploy-storage-dev.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 4️⃣ Database | ${{ needs.deploy-database-dev.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 5️⃣ Compute | ${{ needs.deploy-compute-dev.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 6️⃣ DNS | ${{ needs.deploy-dns-dev.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 7️⃣ Monitoring | ${{ needs.deploy-monitoring-dev.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # QA Environment
+          if [ "${{ needs.determine-environments.outputs.deploy_to_qa }}" == "true" ]; then
+            echo "### 🧪 QA Environment" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Layer | Status |" >> $GITHUB_STEP_SUMMARY
+            echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+            echo "| 1️⃣ Networking | ${{ needs.deploy-networking-qa.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 2️⃣ Security | ${{ needs.deploy-security-qa.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 3️⃣ Storage | ${{ needs.deploy-storage-qa.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 4️⃣ Database | ${{ needs.deploy-database-qa.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 5️⃣ Compute | ${{ needs.deploy-compute-qa.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 6️⃣ DNS | ${{ needs.deploy-dns-qa.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 7️⃣ Monitoring | ${{ needs.deploy-monitoring-qa.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Deployment workflow completed!" >> $GITHUB_STEP_SUMMARY

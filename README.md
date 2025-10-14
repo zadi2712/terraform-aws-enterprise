@@ -309,6 +309,61 @@ terraform apply -var-file=terraform.tfvars
 
 **Dependencies:** All layers
 
+## 📡 Data Sharing Between Layers
+
+### Dual Approach for Maximum Flexibility
+
+This infrastructure implements **two methods** for sharing data between layers:
+
+1. **Terraform Remote State** (Traditional)
+   - Used for Terraform-to-Terraform dependencies
+   - Ensures layer deployment order
+   - Type-safe output access
+
+2. **SSM Parameter Store** (Modern)
+   - Used for runtime configuration
+   - Accessible by applications and CI/CD
+   - Cross-account data sharing
+   - Non-Terraform tool integration
+
+### Example: How Compute Layer Accesses Networking Data
+
+```hcl
+# Method 1: Terraform Remote State (in main.tf)
+data "terraform_remote_state" "networking" {
+  backend = "s3"
+  config = {
+    bucket = "terraform-state-${var.environment}-${data.aws_caller_identity.current.account_id}"
+    key    = "layers/networking/${var.environment}/terraform.tfstate"
+    region = var.aws_region
+  }
+}
+
+# Method 2: SSM Parameter Store (for applications)
+data "aws_ssm_parameter" "vpc_id" {
+  name = "/terraform/${var.project_name}/${var.environment}/networking/vpc_id"
+}
+
+# Both methods provide the same data!
+vpc_id = data.terraform_remote_state.networking.outputs.vpc_id
+# OR
+vpc_id = jsondecode(data.aws_ssm_parameter.vpc_id.value)
+```
+
+### Parameter Naming Convention
+
+All SSM parameters follow this pattern:
+```
+/terraform/<project-name>/<environment>/<layer-name>/<output-key>
+```
+
+Examples:
+- `/terraform/myapp/prod/networking/vpc_id`
+- `/terraform/myapp/dev/compute/eks_cluster_endpoint`
+- `/terraform/myapp/qa/database/rds_endpoint`
+
+**For complete details**, see [docs/SSM_INTEGRATION.md](docs/SSM_INTEGRATION.md)
+
 ## 🌍 Environment Management
 
 ### Environment Structure
@@ -456,6 +511,7 @@ pre-commit run --all-files
 See the `docs/` directory for detailed documentation:
 - **ARCHITECTURE.md** - Design decisions and patterns
 - **DEPLOYMENT.md** - Step-by-step deployment guide
+- **SSM_INTEGRATION.md** - SSM Parameter Store integration for outputs
 - **TROUBLESHOOTING.md** - Common issues and resolutions
 - **SECURITY.md** - Security best practices and requirements
 - **RUNBOOK.md** - Operational procedures
