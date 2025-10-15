@@ -17,9 +17,9 @@ availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
 
 # Subnet CIDR Blocks
 public_subnet_cidrs = [
-  "10.10.1.0/24",  # us-east-1a
-  "10.10.2.0/24",  # us-east-1b
-  "10.10.3.0/24",  # us-east-1c
+  "10.10.1.0/24", # us-east-1a
+  "10.10.2.0/24", # us-east-1b
+  "10.10.3.0/24", # us-east-1c
 ]
 
 private_subnet_cidrs = [
@@ -47,7 +47,7 @@ one_nat_gateway_per_az = true  # One NAT Gateway per AZ for maximum resilience (
 ################################################################################
 
 enable_flow_logs         = true
-flow_logs_retention_days = 90   # Extended retention for compliance and audit
+flow_logs_retention_days = 90 # Extended retention for compliance and audit
 
 ################################################################################
 # VPC Endpoints Configuration
@@ -227,17 +227,17 @@ enable_vpc_endpoints = true
 ################################################################################
 
 common_tags = {
-  Environment       = "prod"
-  Project           = "myapp"
-  ManagedBy         = "Terraform"
-  CostCenter        = "operations"
-  Owner             = "platform-team"
-  Backup            = "continuous"
-  DataClass         = "confidential"
-  Compliance        = "SOC2,PCI-DSS"
-  BusinessUnit      = "product"
-  Criticality       = "high"
-  DisasterRecovery  = "enabled"
-  SecurityPosture   = "high"
-  MonitoringLevel   = "enhanced"
+  Environment      = "prod"
+  Project          = "myapp"
+  ManagedBy        = "Terraform"
+  CostCenter       = "operations"
+  Owner            = "platform-team"
+  Backup           = "continuous"
+  DataClass        = "confidential"
+  Compliance       = "SOC2,PCI-DSS"
+  BusinessUnit     = "product"
+  Criticality      = "high"
+  DisasterRecovery = "enabled"
+  SecurityPosture  = "high"
+  MonitoringLevel  = "enhanced"
 }

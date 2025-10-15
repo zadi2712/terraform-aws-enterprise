@@ -56,8 +56,8 @@ module "vpc" {
   database_subnet_cidrs = var.database_subnet_cidrs
 
   # NAT Gateway Configuration
-  enable_nat_gateway   = var.enable_nat_gateway
-  single_nat_gateway   = var.single_nat_gateway
+  enable_nat_gateway     = var.enable_nat_gateway
+  single_nat_gateway     = var.single_nat_gateway
   one_nat_gateway_per_az = var.one_nat_gateway_per_az
 
   # VPC Features
@@ -206,9 +206,9 @@ module "vpc_endpoints" {
   }
 
   # VPC and network configuration
-  vpc_cidr               = module.vpc.vpc_cidr
-  name_prefix            = "${var.project_name}-${var.environment}"
-  create_security_group  = true
+  vpc_cidr              = module.vpc.vpc_cidr
+  name_prefix           = "${var.project_name}-${var.environment}"
+  create_security_group = true
 
   # Tags
   tags = merge(
@@ -242,31 +242,31 @@ module "ssm_outputs" {
     vpc_arn  = module.vpc.vpc_arn
 
     # Subnets
-    public_subnet_ids              = module.vpc.public_subnet_ids
-    private_subnet_ids             = module.vpc.private_subnet_ids
-    database_subnet_ids            = module.vpc.database_subnet_ids
-    database_subnet_group_name     = module.vpc.database_subnet_group_name
+    public_subnet_ids          = module.vpc.public_subnet_ids
+    private_subnet_ids         = module.vpc.private_subnet_ids
+    database_subnet_ids        = module.vpc.database_subnet_ids
+    database_subnet_group_name = module.vpc.database_subnet_group_name
 
     # Gateways
-    nat_gateway_ids      = module.vpc.nat_gateway_ids
-    internet_gateway_id  = module.vpc.internet_gateway_id
+    nat_gateway_ids     = module.vpc.nat_gateway_ids
+    internet_gateway_id = module.vpc.internet_gateway_id
 
     # Route Tables
     public_route_table_ids  = module.vpc.public_route_table_ids
     private_route_table_ids = module.vpc.private_route_table_ids
 
     # VPC Endpoints
-    vpc_endpoint_s3_id                        = module.vpc.vpc_endpoint_s3_id
-    vpc_endpoint_dynamodb_id                  = module.vpc.vpc_endpoint_dynamodb_id
-    vpc_endpoints_security_group_id           = var.enable_vpc_endpoints ? module.vpc_endpoints[0].security_group_id : null
-    vpc_endpoints_interface                   = var.enable_vpc_endpoints ? module.vpc_endpoints[0].interface_endpoints : {}
-    vpc_endpoints_gateway                     = var.enable_vpc_endpoints ? module.vpc_endpoints[0].gateway_endpoints : {}
-    vpc_endpoints_all                         = var.enable_vpc_endpoints ? module.vpc_endpoints[0].all_endpoints : {}
-    vpc_endpoints_count                       = var.enable_vpc_endpoints ? module.vpc_endpoints[0].endpoint_count : { interface = 0, gateway = 0, total = 0 }
+    vpc_endpoint_s3_id              = module.vpc.vpc_endpoint_s3_id
+    vpc_endpoint_dynamodb_id        = module.vpc.vpc_endpoint_dynamodb_id
+    vpc_endpoints_security_group_id = var.enable_vpc_endpoints ? module.vpc_endpoints[0].security_group_id : null
+    vpc_endpoints_interface         = var.enable_vpc_endpoints ? module.vpc_endpoints[0].interface_endpoints : {}
+    vpc_endpoints_gateway           = var.enable_vpc_endpoints ? module.vpc_endpoints[0].gateway_endpoints : {}
+    vpc_endpoints_all               = var.enable_vpc_endpoints ? module.vpc_endpoints[0].all_endpoints : {}
+    vpc_endpoints_count             = var.enable_vpc_endpoints ? module.vpc_endpoints[0].endpoint_count : { interface = 0, gateway = 0, total = 0 }
 
     # Flow Logs
-    vpc_flow_log_id                           = module.vpc.vpc_flow_log_id
-    vpc_flow_log_cloudwatch_log_group_name    = module.vpc.vpc_flow_log_cloudwatch_log_group_name
+    vpc_flow_log_id                        = module.vpc.vpc_flow_log_id
+    vpc_flow_log_cloudwatch_log_group_name = module.vpc.vpc_flow_log_cloudwatch_log_group_name
 
     # Other
     availability_zones = var.availability_zones

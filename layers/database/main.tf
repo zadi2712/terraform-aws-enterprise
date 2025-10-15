@@ -92,8 +92,8 @@ module "rds" {
   vpc_security_group_ids = [module.rds_security_group.security_group_id]
 
   backup_retention_period = var.backup_retention_days
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
   performance_insights_enabled    = var.enable_performance_insights
@@ -117,11 +117,11 @@ module "ssm_outputs" {
   layer_name   = "database"
 
   outputs = {
-    rds_endpoint             = var.create_rds ? module.rds[0].db_instance_endpoint : null
-    rds_instance_id          = var.create_rds ? module.rds[0].db_instance_id : null
-    rds_security_group_id    = module.rds_security_group.security_group_id
-    database_name            = var.create_rds ? var.database_name : null
-    master_username          = var.create_rds ? var.master_username : null
+    rds_endpoint          = var.create_rds ? module.rds[0].db_instance_endpoint : null
+    rds_instance_id       = var.create_rds ? module.rds[0].db_instance_id : null
+    rds_security_group_id = module.rds_security_group.security_group_id
+    database_name         = var.create_rds ? var.database_name : null
+    master_username       = var.create_rds ? var.master_username : null
   }
 
   output_descriptions = {

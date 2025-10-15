@@ -93,13 +93,13 @@ output "availability_zones" {
 output "network_summary" {
   description = "Summary of network configuration for use by other layers"
   value = {
-    vpc_id                = module.vpc.vpc_id
-    vpc_cidr              = module.vpc.vpc_cidr
-    public_subnet_ids     = module.vpc.public_subnet_ids
-    private_subnet_ids    = module.vpc.private_subnet_ids
-    database_subnet_ids   = module.vpc.database_subnet_ids
-    availability_zones    = var.availability_zones
-    environment           = var.environment
+    vpc_id              = module.vpc.vpc_id
+    vpc_cidr            = module.vpc.vpc_cidr
+    public_subnet_ids   = module.vpc.public_subnet_ids
+    private_subnet_ids  = module.vpc.private_subnet_ids
+    database_subnet_ids = module.vpc.database_subnet_ids
+    availability_zones  = var.availability_zones
+    environment         = var.environment
   }
 }
 

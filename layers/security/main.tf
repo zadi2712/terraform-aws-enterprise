@@ -78,10 +78,10 @@ module "ssm_outputs" {
   layer_name   = "security"
 
   outputs = {
-    kms_key_id                  = aws_kms_key.main.id
-    kms_key_arn                 = aws_kms_key.main.arn
-    kms_key_alias               = aws_kms_alias.main.name
-    ecs_task_execution_role_arn = aws_iam_role.ecs_task_execution.arn
+    kms_key_id                   = aws_kms_key.main.id
+    kms_key_arn                  = aws_kms_key.main.arn
+    kms_key_alias                = aws_kms_alias.main.name
+    ecs_task_execution_role_arn  = aws_iam_role.ecs_task_execution.arn
     ecs_task_execution_role_name = aws_iam_role.ecs_task_execution.name
   }
 

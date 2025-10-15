@@ -38,7 +38,7 @@ variable "parameter_type" {
   description = "Type of SSM parameter (String, StringList, or SecureString)"
   type        = string
   default     = "String"
-  
+
   validation {
     condition     = contains(["String", "StringList", "SecureString"], var.parameter_type)
     error_message = "Parameter type must be String, StringList, or SecureString."

@@ -17,8 +17,8 @@ availability_zones = ["us-east-1a", "us-east-1b"]
 
 # Subnet CIDR Blocks
 public_subnet_cidrs = [
-  "10.0.1.0/24",  # us-east-1a
-  "10.0.2.0/24",  # us-east-1b
+  "10.0.1.0/24", # us-east-1a
+  "10.0.2.0/24", # us-east-1b
 ]
 
 private_subnet_cidrs = [
@@ -44,7 +44,7 @@ one_nat_gateway_per_az = false # Disabled for single NAT
 ################################################################################
 
 enable_flow_logs         = true
-flow_logs_retention_days = 7    # Short retention for dev
+flow_logs_retention_days = 7 # Short retention for dev
 
 ################################################################################
 # VPC Endpoints Configuration
@@ -119,11 +119,11 @@ enable_vpc_endpoints = true
 ################################################################################
 
 common_tags = {
-  Environment     = "dev"
-  Project         = "myapp"
-  ManagedBy       = "Terraform"
-  CostCenter      = "engineering"
-  Owner           = "devops-team"
-  Backup          = "no"
-  DataClass       = "internal"
+  Environment = "dev"
+  Project     = "myapp"
+  ManagedBy   = "Terraform"
+  CostCenter  = "engineering"
+  Owner       = "devops-team"
+  Backup      = "no"
+  DataClass   = "internal"
 }

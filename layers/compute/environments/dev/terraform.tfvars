@@ -34,11 +34,11 @@ eks_endpoint_public_access  = true
 eks_public_access_cidrs     = ["0.0.0.0/0"] # Restrict in production
 
 # Modern Features
-eks_enable_pod_identity  = true
-eks_authentication_mode  = "API_AND_CONFIG_MAP"
+eks_enable_pod_identity = true
+eks_authentication_mode = "API_AND_CONFIG_MAP"
 
 # Logging - Reduced for dev to save costs
-eks_cluster_log_types = ["api", "audit"]
+eks_cluster_log_types  = ["api", "audit"]
 eks_log_retention_days = 3
 
 # Node Groups - Cost-optimized for development

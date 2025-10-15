@@ -1,4 +1,7 @@
-variable "zone_id" { type = string }
+variable "zone_id" {
+  type = string
+}
+
 variable "records" {
   type = map(object({
     type    = string
@@ -12,6 +15,7 @@ variable "records" {
   }))
   default = {}
 }
+
 variable "health_checks" {
   type = map(object({
     fqdn              = string
@@ -23,4 +27,8 @@ variable "health_checks" {
   }))
   default = {}
 }
-variable "tags" { type = map(string); default = {} }
+
+variable "tags" {
+  type    = map(string)
+  default = {}
+}

@@ -150,12 +150,12 @@ output "ssm_parameter_image_tag_mutability" {
 output "ssm_parameters" {
   description = "Map of all SSM Parameter Store names"
   value = {
-    repository_url          = aws_ssm_parameter.repository_url.name
-    repository_arn          = aws_ssm_parameter.repository_arn.name
-    repository_name         = aws_ssm_parameter.repository_name.name
-    registry_id             = aws_ssm_parameter.registry_id.name
-    scan_on_push            = aws_ssm_parameter.scan_on_push.name
-    encryption_type         = aws_ssm_parameter.encryption_type.name
-    image_tag_mutability    = aws_ssm_parameter.image_tag_mutability.name
+    repository_url       = aws_ssm_parameter.repository_url.name
+    repository_arn       = aws_ssm_parameter.repository_arn.name
+    repository_name      = aws_ssm_parameter.repository_name.name
+    registry_id          = aws_ssm_parameter.registry_id.name
+    scan_on_push         = aws_ssm_parameter.scan_on_push.name
+    encryption_type      = aws_ssm_parameter.encryption_type.name
+    image_tag_mutability = aws_ssm_parameter.image_tag_mutability.name
   }
 }

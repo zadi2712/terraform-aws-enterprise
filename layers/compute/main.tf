@@ -52,44 +52,44 @@ data "aws_caller_identity" "current" {}
 # Application repositories
 module "ecr_repositories" {
   source = "../../../modules/ecr"
-  
+
   for_each = var.ecr_repositories
 
   repository_name      = "${var.project_name}-${var.environment}-${each.key}"
   image_tag_mutability = each.value.image_tag_mutability
-  
+
   # Encryption
   encryption_type = var.ecr_encryption_type
   kms_key_arn     = var.ecr_encryption_type == "KMS" ? try(data.terraform_remote_state.security.outputs.kms_key_arn, null) : null
-  
+
   # Scanning
   scan_on_push             = each.value.scan_on_push
   enable_enhanced_scanning = each.value.enable_enhanced_scanning
   scan_frequency           = each.value.scan_frequency
-  
+
   # Lifecycle
   max_image_count  = each.value.max_image_count
   lifecycle_policy = each.value.lifecycle_policy
-  
+
   # Access
   enable_cross_account_access = each.value.enable_cross_account_access
   allowed_account_ids         = each.value.allowed_account_ids
   enable_lambda_pull          = each.value.enable_lambda_pull
-  
+
   # Replication
   enable_replication       = each.value.enable_replication
   replication_destinations = each.value.replication_destinations
-  
+
   # Pull through cache
   enable_pull_through_cache         = each.value.enable_pull_through_cache
   pull_through_cache_prefix         = each.value.pull_through_cache_prefix
   upstream_registry_url             = each.value.upstream_registry_url
   pull_through_cache_credential_arn = each.value.pull_through_cache_credential_arn
-  
+
   # Monitoring
   enable_scan_findings_logging = var.ecr_enable_scan_findings_logging
   log_retention_days           = var.ecr_log_retention_days
-  
+
   tags = merge(
     var.common_tags,
     {
@@ -108,53 +108,53 @@ module "eks_cluster" {
 
   cluster_name    = "${var.project_name}-${var.environment}-eks"
   cluster_version = var.eks_cluster_version
-  
+
   vpc_id     = data.terraform_remote_state.networking.outputs.vpc_id
   subnet_ids = data.terraform_remote_state.networking.outputs.private_subnet_ids
-  
+
   # Network configuration
   endpoint_private_access = var.eks_endpoint_private_access
   endpoint_public_access  = var.eks_endpoint_public_access
   public_access_cidrs     = var.eks_public_access_cidrs
-  
+
   # Modern features
   enable_pod_identity                         = var.eks_enable_pod_identity
   authentication_mode                         = var.eks_authentication_mode
   bootstrap_cluster_creator_admin_permissions = true
-  
+
   # Encryption
   kms_key_arn = try(data.terraform_remote_state.security.outputs.kms_key_arn, null)
-  
+
   # Logging
-  cluster_log_types   = var.eks_cluster_log_types
-  log_retention_days  = var.eks_log_retention_days
-  
+  cluster_log_types  = var.eks_cluster_log_types
+  log_retention_days = var.eks_log_retention_days
+
   # Node groups
   node_groups = var.eks_node_groups
-  
+
   # Fargate profiles
   fargate_profiles = var.eks_fargate_profiles
-  
+
   # Autoscaling
   enable_karpenter          = var.eks_enable_karpenter
   enable_cluster_autoscaler = var.eks_enable_cluster_autoscaler
-  
+
   # Storage drivers
   enable_ebs_csi_driver = var.eks_enable_ebs_csi_driver
   enable_efs_csi_driver = var.eks_enable_efs_csi_driver
-  
+
   # Monitoring
   enable_cloudwatch_observability = var.eks_enable_cloudwatch_observability
   enable_guardduty_agent          = var.eks_enable_guardduty_agent
-  
+
   # Controllers
   enable_aws_load_balancer_controller = var.eks_enable_aws_load_balancer_controller
   enable_external_dns                 = var.eks_enable_external_dns
   external_dns_route53_zone_arns      = var.eks_external_dns_route53_zone_arns
-  
+
   # Access entries
   access_entries = var.eks_access_entries
-  
+
   tags = var.common_tags
 }
 
@@ -231,19 +231,19 @@ module "alb" {
   name               = "${var.project_name}-${var.environment}-alb"
   internal           = false
   load_balancer_type = "application"
-  
+
   vpc_id          = data.terraform_remote_state.networking.outputs.vpc_id
   subnet_ids      = data.terraform_remote_state.networking.outputs.public_subnet_ids
   security_groups = [module.alb_security_group[0].security_group_id]
-  
+
   enable_deletion_protection = var.environment == "prod" ? true : false
-  enable_http2              = true
-  enable_waf                = var.environment == "prod" ? true : false
-  
+  enable_http2               = true
+  enable_waf                 = var.environment == "prod" ? true : false
+
   access_logs_enabled = true
   access_logs_bucket  = try(data.terraform_remote_state.storage.outputs.logs_bucket_name, null)
   access_logs_prefix  = "alb"
-  
+
   tags = var.common_tags
 }
 
@@ -258,17 +258,17 @@ module "bastion" {
   name          = "${var.project_name}-${var.environment}-bastion"
   instance_type = var.bastion_instance_type
   ami_id        = var.bastion_ami_id
-  
+
   subnet_id              = data.terraform_remote_state.networking.outputs.public_subnet_ids[0]
   vpc_security_group_ids = [module.bastion_security_group[0].security_group_id]
-  
+
   key_name                    = var.bastion_key_name
   associate_public_ip_address = true
-  
+
   enable_monitoring = true
-  
+
   user_data = var.bastion_user_data
-  
+
   tags = merge(
     var.common_tags,
     {
@@ -328,16 +328,16 @@ module "ssm_outputs" {
     ecr_repository_names = { for k, v in module.ecr_repositories : k => v.repository_name }
 
     # EKS
-    eks_cluster_id                             = var.enable_eks ? module.eks_cluster[0].cluster_id : null
-    eks_cluster_name                           = var.enable_eks ? module.eks_cluster[0].cluster_name : null
-    eks_cluster_endpoint                       = var.enable_eks ? module.eks_cluster[0].cluster_endpoint : null
-    eks_cluster_version                        = var.enable_eks ? module.eks_cluster[0].cluster_version : null
-    eks_cluster_security_group_id              = var.enable_eks ? module.eks_cluster[0].cluster_security_group_id : null
-    eks_oidc_provider_arn                      = var.enable_eks ? module.eks_cluster[0].oidc_provider_arn : null
-    eks_karpenter_iam_role_arn                 = var.enable_eks ? module.eks_cluster[0].karpenter_iam_role_arn : null
-    eks_karpenter_instance_profile_name        = var.enable_eks ? module.eks_cluster[0].karpenter_instance_profile_name : null
+    eks_cluster_id                                = var.enable_eks ? module.eks_cluster[0].cluster_id : null
+    eks_cluster_name                              = var.enable_eks ? module.eks_cluster[0].cluster_name : null
+    eks_cluster_endpoint                          = var.enable_eks ? module.eks_cluster[0].cluster_endpoint : null
+    eks_cluster_version                           = var.enable_eks ? module.eks_cluster[0].cluster_version : null
+    eks_cluster_security_group_id                 = var.enable_eks ? module.eks_cluster[0].cluster_security_group_id : null
+    eks_oidc_provider_arn                         = var.enable_eks ? module.eks_cluster[0].oidc_provider_arn : null
+    eks_karpenter_iam_role_arn                    = var.enable_eks ? module.eks_cluster[0].karpenter_iam_role_arn : null
+    eks_karpenter_instance_profile_name           = var.enable_eks ? module.eks_cluster[0].karpenter_instance_profile_name : null
     eks_aws_load_balancer_controller_iam_role_arn = var.enable_eks ? module.eks_cluster[0].aws_load_balancer_controller_iam_role_arn : null
-    eks_external_dns_iam_role_arn              = var.enable_eks ? module.eks_cluster[0].external_dns_iam_role_arn : null
+    eks_external_dns_iam_role_arn                 = var.enable_eks ? module.eks_cluster[0].external_dns_iam_role_arn : null
 
     # ECS
     ecs_cluster_id   = var.enable_ecs ? module.ecs_cluster[0].cluster_id : null
@@ -357,29 +357,29 @@ module "ssm_outputs" {
   }
 
   output_descriptions = {
-    ecr_repository_urls                        = "Map of ECR repository URLs"
-    ecr_repository_arns                        = "Map of ECR repository ARNs"
-    ecr_repository_names                       = "Map of ECR repository names"
-    eks_cluster_id                             = "EKS cluster ID"
-    eks_cluster_name                           = "EKS cluster name"
-    eks_cluster_endpoint                       = "EKS cluster endpoint URL"
-    eks_cluster_version                        = "EKS cluster Kubernetes version"
-    eks_cluster_security_group_id              = "EKS cluster security group ID"
-    eks_oidc_provider_arn                      = "EKS OIDC provider ARN for IAM roles"
-    eks_karpenter_iam_role_arn                 = "Karpenter IAM role ARN"
-    eks_karpenter_instance_profile_name        = "Karpenter EC2 instance profile name"
+    ecr_repository_urls                           = "Map of ECR repository URLs"
+    ecr_repository_arns                           = "Map of ECR repository ARNs"
+    ecr_repository_names                          = "Map of ECR repository names"
+    eks_cluster_id                                = "EKS cluster ID"
+    eks_cluster_name                              = "EKS cluster name"
+    eks_cluster_endpoint                          = "EKS cluster endpoint URL"
+    eks_cluster_version                           = "EKS cluster Kubernetes version"
+    eks_cluster_security_group_id                 = "EKS cluster security group ID"
+    eks_oidc_provider_arn                         = "EKS OIDC provider ARN for IAM roles"
+    eks_karpenter_iam_role_arn                    = "Karpenter IAM role ARN"
+    eks_karpenter_instance_profile_name           = "Karpenter EC2 instance profile name"
     eks_aws_load_balancer_controller_iam_role_arn = "AWS Load Balancer Controller IAM role ARN"
-    eks_external_dns_iam_role_arn              = "External DNS IAM role ARN"
-    ecs_cluster_id                             = "ECS cluster ID"
-    ecs_cluster_name                           = "ECS cluster name"
-    ecs_cluster_arn                            = "ECS cluster ARN"
-    alb_arn                                    = "Application Load Balancer ARN"
-    alb_dns_name                               = "Application Load Balancer DNS name"
-    alb_zone_id                                = "Application Load Balancer Route53 zone ID"
-    alb_security_group_id                      = "Application Load Balancer security group ID"
-    bastion_instance_id                        = "Bastion host EC2 instance ID"
-    bastion_public_ip                          = "Bastion host public IP address"
-    bastion_security_group_id                  = "Bastion host security group ID"
+    eks_external_dns_iam_role_arn                 = "External DNS IAM role ARN"
+    ecs_cluster_id                                = "ECS cluster ID"
+    ecs_cluster_name                              = "ECS cluster name"
+    ecs_cluster_arn                               = "ECS cluster ARN"
+    alb_arn                                       = "Application Load Balancer ARN"
+    alb_dns_name                                  = "Application Load Balancer DNS name"
+    alb_zone_id                                   = "Application Load Balancer Route53 zone ID"
+    alb_security_group_id                         = "Application Load Balancer security group ID"
+    bastion_instance_id                           = "Bastion host EC2 instance ID"
+    bastion_public_ip                             = "Bastion host public IP address"
+    bastion_security_group_id                     = "Bastion host security group ID"
   }
 
   tags = var.common_tags

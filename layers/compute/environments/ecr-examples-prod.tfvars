@@ -8,18 +8,18 @@
 ecr_repositories = {
   # Web application - Production
   "web-app" = {
-    image_tag_mutability     = "IMMUTABLE"        # Immutable tags for prod
-    scan_on_push             = true
-    enable_enhanced_scanning = true               # Enhanced scanning for prod
-    scan_frequency           = "CONTINUOUS_SCAN"  # Continuous monitoring
-    max_image_count          = 100                # Keep more images in prod
-    enable_lambda_pull       = false
-    enable_cross_account_access = true            # Allow UAT/QA access
-    allowed_account_ids      = [
-      "123456789012",  # UAT account
-      "210987654321"   # QA account
+    image_tag_mutability        = "IMMUTABLE" # Immutable tags for prod
+    scan_on_push                = true
+    enable_enhanced_scanning    = true              # Enhanced scanning for prod
+    scan_frequency              = "CONTINUOUS_SCAN" # Continuous monitoring
+    max_image_count             = 100               # Keep more images in prod
+    enable_lambda_pull          = false
+    enable_cross_account_access = true # Allow UAT/QA access
+    allowed_account_ids = [
+      "123456789012", # UAT account
+      "210987654321"  # QA account
     ]
-    enable_replication       = true               # Multi-region for DR
+    enable_replication = true # Multi-region for DR
     replication_destinations = [
       {
         region      = "us-west-2"
@@ -34,14 +34,14 @@ ecr_repositories = {
 
   # API service - Production
   "api-service" = {
-    image_tag_mutability     = "IMMUTABLE"
-    scan_on_push             = true
-    enable_enhanced_scanning = true
-    scan_frequency           = "CONTINUOUS_SCAN"
-    max_image_count          = 100
+    image_tag_mutability        = "IMMUTABLE"
+    scan_on_push                = true
+    enable_enhanced_scanning    = true
+    scan_frequency              = "CONTINUOUS_SCAN"
+    max_image_count             = 100
     enable_cross_account_access = true
-    allowed_account_ids      = ["123456789012", "210987654321"]
-    enable_replication       = true
+    allowed_account_ids         = ["123456789012", "210987654321"]
+    enable_replication          = true
     replication_destinations = [
       {
         region      = "us-west-2"
@@ -52,12 +52,12 @@ ecr_repositories = {
 
   # Background worker - Production
   "worker" = {
-    image_tag_mutability     = "IMMUTABLE"
-    scan_on_push             = true
-    enable_enhanced_scanning = true
-    max_image_count          = 50
+    image_tag_mutability        = "IMMUTABLE"
+    scan_on_push                = true
+    enable_enhanced_scanning    = true
+    max_image_count             = 50
     enable_cross_account_access = true
-    allowed_account_ids      = ["123456789012"]
+    allowed_account_ids         = ["123456789012"]
   }
 
   # Lambda function - Production
@@ -78,15 +78,15 @@ ecr_repositories = {
 
   # Shared base images
   "base-images" = {
-    image_tag_mutability     = "IMMUTABLE"
-    scan_on_push             = true
-    enable_enhanced_scanning = true
-    max_image_count          = 20
+    image_tag_mutability        = "IMMUTABLE"
+    scan_on_push                = true
+    enable_enhanced_scanning    = true
+    max_image_count             = 20
     enable_cross_account_access = true
-    allowed_account_ids      = [
-      "123456789012",  # UAT
-      "210987654321",  # QA
-      "345678901234"   # Dev
+    allowed_account_ids = [
+      "123456789012", # UAT
+      "210987654321", # QA
+      "345678901234"  # Dev
     ]
   }
 }
@@ -96,4 +96,4 @@ ecr_encryption_type = "KMS"
 
 # Scan findings logging enabled for compliance
 ecr_enable_scan_findings_logging = true
-ecr_log_retention_days           = 90  # 90 days for compliance
+ecr_log_retention_days           = 90 # 90 days for compliance

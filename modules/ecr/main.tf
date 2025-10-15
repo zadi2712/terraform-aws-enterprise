@@ -45,9 +45,9 @@ resource "aws_ecr_lifecycle_policy" "this" {
         rulePriority = 1
         description  = "Keep last ${var.max_image_count} images"
         selection = {
-          tagStatus     = "any"
-          countType     = "imageCountMoreThan"
-          countNumber   = var.max_image_count
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = var.max_image_count
         }
         action = {
           type = "expire"
@@ -197,7 +197,7 @@ resource "aws_ssm_parameter" "repository_url" {
   description = "ECR repository URL for ${var.repository_name}"
   type        = "String"
   value       = aws_ecr_repository.this.repository_url
-  
+
   tags = merge(
     var.tags,
     {
@@ -214,7 +214,7 @@ resource "aws_ssm_parameter" "repository_arn" {
   description = "ECR repository ARN for ${var.repository_name}"
   type        = "String"
   value       = aws_ecr_repository.this.arn
-  
+
   tags = merge(
     var.tags,
     {
@@ -231,7 +231,7 @@ resource "aws_ssm_parameter" "repository_name" {
   description = "ECR repository name for ${var.repository_name}"
   type        = "String"
   value       = aws_ecr_repository.this.name
-  
+
   tags = merge(
     var.tags,
     {
@@ -248,7 +248,7 @@ resource "aws_ssm_parameter" "registry_id" {
   description = "ECR registry ID for ${var.repository_name}"
   type        = "String"
   value       = aws_ecr_repository.this.registry_id
-  
+
   tags = merge(
     var.tags,
     {
@@ -265,7 +265,7 @@ resource "aws_ssm_parameter" "scan_on_push" {
   description = "Scan on push configuration for ${var.repository_name}"
   type        = "String"
   value       = tostring(var.scan_on_push)
-  
+
   tags = merge(
     var.tags,
     {
@@ -282,7 +282,7 @@ resource "aws_ssm_parameter" "encryption_type" {
   description = "Encryption type for ${var.repository_name}"
   type        = "String"
   value       = var.encryption_type
-  
+
   tags = merge(
     var.tags,
     {
@@ -299,7 +299,7 @@ resource "aws_ssm_parameter" "image_tag_mutability" {
   description = "Image tag mutability for ${var.repository_name}"
   type        = "String"
   value       = var.image_tag_mutability
-  
+
   tags = merge(
     var.tags,
     {

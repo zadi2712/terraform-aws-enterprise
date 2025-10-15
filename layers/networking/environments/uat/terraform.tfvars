@@ -17,9 +17,9 @@ availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
 
 # Subnet CIDR Blocks
 public_subnet_cidrs = [
-  "10.2.1.0/24",  # us-east-1a
-  "10.2.2.0/24",  # us-east-1b
-  "10.2.3.0/24",  # us-east-1c
+  "10.2.1.0/24", # us-east-1a
+  "10.2.2.0/24", # us-east-1b
+  "10.2.3.0/24", # us-east-1c
 ]
 
 private_subnet_cidrs = [
@@ -47,7 +47,7 @@ one_nat_gateway_per_az = true  # One NAT per AZ for redundancy (3 NAT Gateways)
 ################################################################################
 
 enable_flow_logs         = true
-flow_logs_retention_days = 60   # Extended retention for UAT
+flow_logs_retention_days = 60 # Extended retention for UAT
 
 ################################################################################
 # VPC Endpoints Configuration
@@ -128,13 +128,13 @@ enable_vpc_endpoints = true
 ################################################################################
 
 common_tags = {
-  Environment     = "uat"
-  Project         = "myapp"
-  ManagedBy       = "Terraform"
-  CostCenter      = "engineering"
-  Owner           = "uat-team"
-  Backup          = "daily"
-  DataClass       = "confidential"
-  TestingPhase    = "user-acceptance"
-  BusinessUnit    = "product"
+  Environment  = "uat"
+  Project      = "myapp"
+  ManagedBy    = "Terraform"
+  CostCenter   = "engineering"
+  Owner        = "uat-team"
+  Backup       = "daily"
+  DataClass    = "confidential"
+  TestingPhase = "user-acceptance"
+  BusinessUnit = "product"
 }

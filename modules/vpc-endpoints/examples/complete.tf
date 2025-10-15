@@ -30,7 +30,7 @@ data "aws_subnets" "private" {
     name   = "vpc-id"
     values = [var.vpc_id]
   }
-  
+
   tags = {
     Type = "private"
   }
@@ -38,7 +38,7 @@ data "aws_subnets" "private" {
 
 data "aws_route_tables" "private" {
   vpc_id = var.vpc_id
-  
+
   filter {
     name   = "tag:Type"
     values = ["private"]
@@ -71,22 +71,22 @@ module "vpc_endpoints" {
       service             = "ec2"
       private_dns_enabled = true
     }
-    
+
     ec2messages = {
       service             = "ec2messages"
       private_dns_enabled = true
     }
-    
+
     autoscaling = {
       service             = "autoscaling"
       private_dns_enabled = true
     }
-    
+
     lambda = {
       service             = "lambda"
       private_dns_enabled = true
     }
-    
+
     ############################################################################
     # Container Services
     ############################################################################
@@ -94,27 +94,27 @@ module "vpc_endpoints" {
       service             = "ecs"
       private_dns_enabled = true
     }
-    
+
     ecs_agent = {
       service             = "ecs-agent"
       private_dns_enabled = true
     }
-    
+
     ecs_telemetry = {
       service             = "ecs-telemetry"
       private_dns_enabled = true
     }
-    
+
     ecr_api = {
       service             = "ecr.api"
       private_dns_enabled = true
     }
-    
+
     ecr_dkr = {
       service             = "ecr.dkr"
       private_dns_enabled = true
     }
-    
+
     ############################################################################
     # Database Services
     ############################################################################
@@ -122,17 +122,17 @@ module "vpc_endpoints" {
       service             = "rds"
       private_dns_enabled = true
     }
-    
+
     rds_data = {
       service             = "rds-data"
       private_dns_enabled = true
     }
-    
+
     elasticache = {
       service             = "elasticache"
       private_dns_enabled = true
     }
-    
+
     ############################################################################
     # Security & Identity
     ############################################################################
@@ -140,17 +140,17 @@ module "vpc_endpoints" {
       service             = "kms"
       private_dns_enabled = true
     }
-    
+
     secretsmanager = {
       service             = "secretsmanager"
       private_dns_enabled = true
     }
-    
+
     sts = {
       service             = "sts"
       private_dns_enabled = true
     }
-    
+
     ############################################################################
     # Monitoring & Logging
     ############################################################################
@@ -158,17 +158,17 @@ module "vpc_endpoints" {
       service             = "logs"
       private_dns_enabled = true
     }
-    
+
     monitoring = {
       service             = "monitoring"
       private_dns_enabled = true
     }
-    
+
     events = {
       service             = "events"
       private_dns_enabled = true
     }
-    
+
     ############################################################################
     # Messaging Services
     ############################################################################
@@ -176,12 +176,12 @@ module "vpc_endpoints" {
       service             = "sns"
       private_dns_enabled = true
     }
-    
+
     sqs = {
       service             = "sqs"
       private_dns_enabled = true
     }
-    
+
     ############################################################################
     # Systems Management
     ############################################################################
@@ -189,12 +189,12 @@ module "vpc_endpoints" {
       service             = "ssm"
       private_dns_enabled = true
     }
-    
+
     ssmmessages = {
       service             = "ssmmessages"
       private_dns_enabled = true
     }
-    
+
     ############################################################################
     # Load Balancing
     ############################################################################
@@ -202,7 +202,7 @@ module "vpc_endpoints" {
       service             = "elasticloadbalancing"
       private_dns_enabled = true
     }
-    
+
     ############################################################################
     # Gateway Endpoints (FREE)
     ############################################################################
@@ -211,7 +211,7 @@ module "vpc_endpoints" {
       service_type    = "Gateway"
       route_table_ids = data.aws_route_tables.private.ids
     }
-    
+
     dynamodb = {
       service         = "dynamodb"
       service_type    = "Gateway"

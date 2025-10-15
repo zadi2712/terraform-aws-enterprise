@@ -17,9 +17,9 @@ availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
 
 # Subnet CIDR Blocks
 public_subnet_cidrs = [
-  "10.1.1.0/24",  # us-east-1a
-  "10.1.2.0/24",  # us-east-1b
-  "10.1.3.0/24",  # us-east-1c
+  "10.1.1.0/24", # us-east-1a
+  "10.1.2.0/24", # us-east-1b
+  "10.1.3.0/24", # us-east-1c
 ]
 
 private_subnet_cidrs = [
@@ -47,7 +47,7 @@ one_nat_gateway_per_az = true  # One NAT per AZ (3 NAT Gateways)
 ################################################################################
 
 enable_flow_logs         = true
-flow_logs_retention_days = 30   # Standard retention for QA
+flow_logs_retention_days = 30 # Standard retention for QA
 
 ################################################################################
 # VPC Endpoints Configuration
@@ -125,12 +125,12 @@ enable_vpc_endpoints = true
 ################################################################################
 
 common_tags = {
-  Environment     = "qa"
-  Project         = "myapp"
-  ManagedBy       = "Terraform"
-  CostCenter      = "engineering"
-  Owner           = "qa-team"
-  Backup          = "daily"
-  DataClass       = "internal"
-  TestingPhase    = "integration"
+  Environment  = "qa"
+  Project      = "myapp"
+  ManagedBy    = "Terraform"
+  CostCenter   = "engineering"
+  Owner        = "qa-team"
+  Backup       = "daily"
+  DataClass    = "internal"
+  TestingPhase = "integration"
 }

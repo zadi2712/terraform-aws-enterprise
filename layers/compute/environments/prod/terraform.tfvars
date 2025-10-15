@@ -35,11 +35,11 @@ eks_endpoint_public_access  = true
 eks_public_access_cidrs     = ["203.0.113.0/24"] # Your office/VPN CIDR only
 
 # Modern Features
-eks_enable_pod_identity  = true
-eks_authentication_mode  = "API_AND_CONFIG_MAP"
+eks_enable_pod_identity = true
+eks_authentication_mode = "API_AND_CONFIG_MAP"
 
 # Logging - Full logging for production
-eks_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+eks_cluster_log_types  = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 eks_log_retention_days = 30
 
 # Node Groups - Multi-AZ, mixed instance types for resilience
@@ -104,8 +104,8 @@ eks_node_groups = {
     disk_size      = 100
 
     labels = {
-      role         = "compute"
-      environment  = "prod"
+      role          = "compute"
+      environment   = "prod"
       workload_type = "compute-intensive"
     }
 

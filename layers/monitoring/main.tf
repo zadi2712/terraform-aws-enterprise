@@ -64,10 +64,10 @@ module "ssm_outputs" {
   layer_name   = "monitoring"
 
   outputs = {
-    sns_topic_arn   = aws_sns_topic.alerts.arn
-    sns_topic_name  = aws_sns_topic.alerts.name
-    log_group_name  = aws_cloudwatch_log_group.application.name
-    log_group_arn   = aws_cloudwatch_log_group.application.arn
+    sns_topic_arn  = aws_sns_topic.alerts.arn
+    sns_topic_name = aws_sns_topic.alerts.name
+    log_group_name = aws_cloudwatch_log_group.application.name
+    log_group_arn  = aws_cloudwatch_log_group.application.arn
   }
 
   output_descriptions = {

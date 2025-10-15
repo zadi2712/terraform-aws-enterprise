@@ -13,7 +13,7 @@ locals {
       ManagedBy = "terraform"
     }
   )
-  
+
   # Generate OIDC issuer without https:// prefix
   oidc_issuer = replace(aws_eks_cluster.this.identity[0].oidc[0].issuer, "https://", "")
 }
@@ -343,12 +343,12 @@ resource "aws_iam_role_policy_attachment" "node_ssm_policy" {
 ################################################################################
 
 resource "aws_eks_addon" "vpc_cni" {
-  cluster_name             = aws_eks_cluster.this.name
-  addon_name               = "vpc-cni"
-  addon_version            = var.vpc_cni_version
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "vpc-cni"
+  addon_version               = var.vpc_cni_version
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "PRESERVE"
-  service_account_role_arn = var.enable_pod_identity ? null : aws_iam_role.vpc_cni[0].arn
+  service_account_role_arn    = var.enable_pod_identity ? null : aws_iam_role.vpc_cni[0].arn
 
   # Pod Identity association (if enabled)
   dynamic "pod_identity_association" {
@@ -365,9 +365,9 @@ resource "aws_eks_addon" "vpc_cni" {
 }
 
 resource "aws_eks_addon" "coredns" {
-  cluster_name      = aws_eks_cluster.this.name
-  addon_name        = "coredns"
-  addon_version     = var.coredns_version
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "coredns"
+  addon_version               = var.coredns_version
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "PRESERVE"
 
@@ -379,9 +379,9 @@ resource "aws_eks_addon" "coredns" {
 }
 
 resource "aws_eks_addon" "kube_proxy" {
-  cluster_name      = aws_eks_cluster.this.name
-  addon_name        = "kube-proxy"
-  addon_version     = var.kube_proxy_version
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "kube-proxy"
+  addon_version               = var.kube_proxy_version
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "PRESERVE"
 
@@ -393,12 +393,12 @@ resource "aws_eks_addon" "kube_proxy" {
 resource "aws_eks_addon" "ebs_csi_driver" {
   count = var.enable_ebs_csi_driver ? 1 : 0
 
-  cluster_name             = aws_eks_cluster.this.name
-  addon_name               = "aws-ebs-csi-driver"
-  addon_version            = var.ebs_csi_driver_version
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "aws-ebs-csi-driver"
+  addon_version               = var.ebs_csi_driver_version
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "PRESERVE"
-  service_account_role_arn = var.enable_pod_identity ? null : aws_iam_role.ebs_csi[0].arn
+  service_account_role_arn    = var.enable_pod_identity ? null : aws_iam_role.ebs_csi[0].arn
 
   # Pod Identity association (if enabled)
   dynamic "pod_identity_association" {
@@ -417,12 +417,12 @@ resource "aws_eks_addon" "ebs_csi_driver" {
 resource "aws_eks_addon" "efs_csi_driver" {
   count = var.enable_efs_csi_driver ? 1 : 0
 
-  cluster_name             = aws_eks_cluster.this.name
-  addon_name               = "aws-efs-csi-driver"
-  addon_version            = var.efs_csi_driver_version
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "aws-efs-csi-driver"
+  addon_version               = var.efs_csi_driver_version
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "PRESERVE"
-  service_account_role_arn = var.enable_pod_identity ? null : aws_iam_role.efs_csi[0].arn
+  service_account_role_arn    = var.enable_pod_identity ? null : aws_iam_role.efs_csi[0].arn
 
   # Pod Identity association (if enabled)
   dynamic "pod_identity_association" {
@@ -442,12 +442,12 @@ resource "aws_eks_addon" "efs_csi_driver" {
 resource "aws_eks_addon" "cloudwatch_observability" {
   count = var.enable_cloudwatch_observability ? 1 : 0
 
-  cluster_name             = aws_eks_cluster.this.name
-  addon_name               = "amazon-cloudwatch-observability"
-  addon_version            = var.cloudwatch_observability_version
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "amazon-cloudwatch-observability"
+  addon_version               = var.cloudwatch_observability_version
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "PRESERVE"
-  service_account_role_arn = var.enable_pod_identity ? null : aws_iam_role.cloudwatch_observability[0].arn
+  service_account_role_arn    = var.enable_pod_identity ? null : aws_iam_role.cloudwatch_observability[0].arn
 
   tags = local.common_tags
 
@@ -458,9 +458,9 @@ resource "aws_eks_addon" "cloudwatch_observability" {
 resource "aws_eks_addon" "guardduty_agent" {
   count = var.enable_guardduty_agent ? 1 : 0
 
-  cluster_name      = aws_eks_cluster.this.name
-  addon_name        = "aws-guardduty-agent"
-  addon_version     = var.guardduty_agent_version
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "aws-guardduty-agent"
+  addon_version               = var.guardduty_agent_version
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "PRESERVE"
 
@@ -473,9 +473,9 @@ resource "aws_eks_addon" "guardduty_agent" {
 resource "aws_eks_addon" "pod_identity_agent" {
   count = var.enable_pod_identity ? 1 : 0
 
-  cluster_name      = aws_eks_cluster.this.name
-  addon_name        = "eks-pod-identity-agent"
-  addon_version     = var.pod_identity_agent_version
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "eks-pod-identity-agent"
+  addon_version               = var.pod_identity_agent_version
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "PRESERVE"
 
@@ -981,7 +981,7 @@ data "aws_iam_policy_document" "karpenter_assume" {
         values   = ["system:serviceaccount:karpenter:karpenter"]
       }
     }
-    
+
     dynamic "condition" {
       for_each = var.enable_pod_identity ? [] : [1]
       content {
@@ -1112,7 +1112,7 @@ data "aws_iam_policy_document" "cluster_autoscaler_assume" {
         values   = ["system:serviceaccount:kube-system:cluster-autoscaler"]
       }
     }
-    
+
     dynamic "condition" {
       for_each = var.enable_pod_identity ? [] : [1]
       content {
@@ -1217,7 +1217,7 @@ data "aws_iam_policy_document" "cert_manager_assume" {
         values   = ["system:serviceaccount:cert-manager:cert-manager"]
       }
     }
-    
+
     dynamic "condition" {
       for_each = var.enable_pod_identity ? [] : [1]
       content {
@@ -1318,7 +1318,7 @@ data "aws_iam_policy_document" "aws_load_balancer_controller_assume" {
         values   = ["system:serviceaccount:kube-system:aws-load-balancer-controller"]
       }
     }
-    
+
     dynamic "condition" {
       for_each = var.enable_pod_identity ? [] : [1]
       content {
@@ -1413,7 +1413,7 @@ data "aws_iam_policy_document" "cluster_autoscaler_assume" {
         values   = ["system:serviceaccount:kube-system:cluster-autoscaler"]
       }
     }
-    
+
     dynamic "condition" {
       for_each = var.enable_pod_identity ? [] : [1]
       content {
@@ -1722,7 +1722,7 @@ data "aws_iam_policy_document" "cluster_autoscaler_assume" {
         values   = ["system:serviceaccount:kube-system:cluster-autoscaler"]
       }
     }
-    
+
     dynamic "condition" {
       for_each = var.enable_pod_identity ? [] : [1]
       content {
@@ -1827,7 +1827,7 @@ data "aws_iam_policy_document" "cert_manager_assume" {
         values   = ["system:serviceaccount:cert-manager:cert-manager"]
       }
     }
-    
+
     dynamic "condition" {
       for_each = var.enable_pod_identity ? [] : [1]
       content {
@@ -1928,7 +1928,7 @@ data "aws_iam_policy_document" "aws_load_balancer_controller_assume" {
         values   = ["system:serviceaccount:kube-system:aws-load-balancer-controller"]
       }
     }
-    
+
     dynamic "condition" {
       for_each = var.enable_pod_identity ? [] : [1]
       content {
@@ -2011,7 +2011,7 @@ data "aws_iam_policy_document" "cluster_autoscaler_assume" {
         values   = ["system:serviceaccount:kube-system:cluster-autoscaler"]
       }
     }
-    
+
     dynamic "condition" {
       for_each = var.enable_pod_identity ? [] : [1]
       content {
@@ -2116,7 +2116,7 @@ data "aws_iam_policy_document" "aws_load_balancer_controller_assume" {
         values   = ["system:serviceaccount:kube-system:aws-load-balancer-controller"]
       }
     }
-    
+
     dynamic "condition" {
       for_each = var.enable_pod_identity ? [] : [1]
       content {
@@ -2193,7 +2193,7 @@ data "aws_iam_policy_document" "external_dns_assume" {
         values   = ["system:serviceaccount:kube-system:external-dns"]
       }
     }
-    
+
     dynamic "condition" {
       for_each = var.enable_pod_identity ? [] : [1]
       content {

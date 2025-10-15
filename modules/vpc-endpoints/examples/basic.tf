@@ -40,19 +40,19 @@ module "vpc_endpoints" {
       service             = "ec2"
       private_dns_enabled = true
     }
-    
+
     # CloudWatch Logs
     logs = {
       service             = "logs"
       private_dns_enabled = true
     }
-    
+
     # Systems Manager
     ssm = {
       service             = "ssm"
       private_dns_enabled = true
     }
-    
+
     # Secrets Manager
     secretsmanager = {
       service             = "secretsmanager"

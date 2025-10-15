@@ -66,7 +66,7 @@ resource "aws_vpc_security_group_ingress_rule" "vpc_endpoints_https" {
   to_port     = 443
   ip_protocol = "tcp"
   cidr_ipv4   = var.vpc_cidr
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -81,10 +81,10 @@ resource "aws_vpc_security_group_egress_rule" "vpc_endpoints_all" {
 
   security_group_id = aws_security_group.vpc_endpoints[0].id
   description       = "Allow all outbound traffic"
-  
+
   ip_protocol = "-1"
   cidr_ipv4   = "0.0.0.0/0"
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -100,29 +100,29 @@ resource "aws_vpc_security_group_egress_rule" "vpc_endpoints_all" {
 resource "aws_vpc_endpoint" "interface" {
   for_each = local.interface_endpoints
 
-  vpc_id              = var.vpc_id
-  service_name        = "com.amazonaws.${data.aws_region.current.name}.${each.value.service}"
-  vpc_endpoint_type   = "Interface"
-  
+  vpc_id            = var.vpc_id
+  service_name      = "com.amazonaws.${data.aws_region.current.name}.${each.value.service}"
+  vpc_endpoint_type = "Interface"
+
   # Private DNS configuration
   private_dns_enabled = lookup(each.value, "private_dns_enabled", true)
-  
+
   # Subnet configuration
   subnet_ids = lookup(each.value, "subnet_ids", var.private_subnet_ids)
-  
+
   # Security group configuration
   security_group_ids = lookup(
     each.value,
     "security_group_ids",
     local.create_security_group ? [aws_security_group.vpc_endpoints[0].id] : var.security_group_ids
   )
-  
+
   # Optional policy
   policy = lookup(each.value, "policy", null)
-  
+
   # Auto-accept - useful for cross-account endpoints
   auto_accept = lookup(each.value, "auto_accept", null)
-  
+
   tags = merge(
     local.common_tags,
     lookup(each.value, "tags", {}),
@@ -132,7 +132,7 @@ resource "aws_vpc_endpoint" "interface" {
       Type    = "Interface"
     }
   )
-  
+
   # Timeouts
   timeouts {
     create = lookup(each.value, "timeout_create", "10m")
@@ -158,16 +158,16 @@ resource "aws_vpc_endpoint" "gateway" {
   vpc_id            = var.vpc_id
   service_name      = "com.amazonaws.${data.aws_region.current.name}.${each.value.service}"
   vpc_endpoint_type = "Gateway"
-  
+
   # Route table associations for gateway endpoints
   route_table_ids = lookup(each.value, "route_table_ids", var.route_table_ids)
-  
+
   # Optional policy
   policy = lookup(each.value, "policy", null)
-  
+
   # Auto-accept
   auto_accept = lookup(each.value, "auto_accept", null)
-  
+
   tags = merge(
     local.common_tags,
     lookup(each.value, "tags", {}),
@@ -177,7 +177,7 @@ resource "aws_vpc_endpoint" "gateway" {
       Type    = "Gateway"
     }
   )
-  
+
   # Timeouts
   timeouts {
     create = lookup(each.value, "timeout_create", "10m")

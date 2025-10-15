@@ -114,16 +114,16 @@ output "node_groups" {
   description = "Outputs from EKS node groups"
   value = {
     for k, v in aws_eks_node_group.this : k => {
-      id                  = v.id
-      arn                 = v.arn
-      status              = v.status
-      capacity_type       = v.capacity_type
-      instance_types      = v.instance_types
-      desired_size        = v.scaling_config[0].desired_size
-      min_size            = v.scaling_config[0].min_size
-      max_size            = v.scaling_config[0].max_size
-      version             = v.version
-      release_version     = v.release_version
+      id              = v.id
+      arn             = v.arn
+      status          = v.status
+      capacity_type   = v.capacity_type
+      instance_types  = v.instance_types
+      desired_size    = v.scaling_config[0].desired_size
+      min_size        = v.scaling_config[0].min_size
+      max_size        = v.scaling_config[0].max_size
+      version         = v.version
+      release_version = v.release_version
     }
   }
 }

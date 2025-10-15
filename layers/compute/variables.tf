@@ -35,17 +35,17 @@ variable "common_tags" {
 variable "ecr_repositories" {
   description = "Map of ECR repositories to create"
   type = map(object({
-    image_tag_mutability         = optional(string, "MUTABLE")
-    scan_on_push                 = optional(bool, true)
-    enable_enhanced_scanning     = optional(bool, false)
-    scan_frequency               = optional(string, "SCAN_ON_PUSH")
-    max_image_count              = optional(number, 100)
-    lifecycle_policy             = optional(string, null)
-    enable_cross_account_access  = optional(bool, false)
-    allowed_account_ids          = optional(list(string), [])
-    enable_lambda_pull           = optional(bool, false)
-    enable_replication           = optional(bool, false)
-    replication_destinations     = optional(list(object({
+    image_tag_mutability        = optional(string, "MUTABLE")
+    scan_on_push                = optional(bool, true)
+    enable_enhanced_scanning    = optional(bool, false)
+    scan_frequency              = optional(string, "SCAN_ON_PUSH")
+    max_image_count             = optional(number, 100)
+    lifecycle_policy            = optional(string, null)
+    enable_cross_account_access = optional(bool, false)
+    allowed_account_ids         = optional(list(string), [])
+    enable_lambda_pull          = optional(bool, false)
+    enable_replication          = optional(bool, false)
+    replication_destinations = optional(list(object({
       region      = string
       registry_id = string
     })), [])

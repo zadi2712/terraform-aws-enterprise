@@ -36,7 +36,7 @@ resource "aws_security_group" "custom_vpce" {
   }
 
   # No egress rules (deny all outbound)
-  
+
   tags = {
     Name = "custom-vpce-sg"
   }
@@ -51,18 +51,18 @@ data "aws_iam_policy_document" "s3_endpoint_policy" {
   statement {
     sid    = "AllowSpecificBuckets"
     effect = "Allow"
-    
+
     principals {
       type        = "*"
       identifiers = ["*"]
     }
-    
+
     actions = [
       "s3:GetObject",
       "s3:PutObject",
       "s3:ListBucket"
     ]
-    
+
     resources = [
       "arn:aws:s3:::${var.app_bucket}",
       "arn:aws:s3:::${var.app_bucket}/*",
@@ -70,23 +70,23 @@ data "aws_iam_policy_document" "s3_endpoint_policy" {
       "arn:aws:s3:::${var.logs_bucket}/*"
     ]
   }
-  
+
   statement {
     sid    = "DenyUnencryptedObjectUploads"
     effect = "Deny"
-    
+
     principals {
       type        = "*"
       identifiers = ["*"]
     }
-    
+
     actions = ["s3:PutObject"]
-    
+
     resources = [
       "arn:aws:s3:::${var.app_bucket}/*",
       "arn:aws:s3:::${var.logs_bucket}/*"
     ]
-    
+
     condition {
       test     = "StringNotEquals"
       variable = "s3:x-amz-server-side-encryption"
@@ -100,17 +100,17 @@ data "aws_iam_policy_document" "secrets_endpoint_policy" {
   statement {
     sid    = "AllowSpecificSecrets"
     effect = "Allow"
-    
+
     principals {
       type        = "*"
       identifiers = ["*"]
     }
-    
+
     actions = [
       "secretsmanager:GetSecretValue",
       "secretsmanager:DescribeSecret"
     ]
-    
+
     resources = [
       "arn:aws:secretsmanager:${var.aws_region}:${var.account_id}:secret:${var.environment}/*"
     ]
@@ -140,14 +140,14 @@ module "vpc_endpoints" {
     s3_interface = {
       service             = "s3"
       service_type        = "Interface"
-      private_dns_enabled = false  # Using custom DNS
-      subnet_ids          = [var.private_subnet_ids[0]]  # Single AZ for cost
+      private_dns_enabled = false                       # Using custom DNS
+      subnet_ids          = [var.private_subnet_ids[0]] # Single AZ for cost
       policy              = data.aws_iam_policy_document.s3_endpoint_policy.json
       tags = {
         Purpose = "Restricted S3 access"
       }
     }
-    
+
     # Secrets Manager with restrictive policy
     secretsmanager = {
       service             = "secretsmanager"
@@ -158,7 +158,7 @@ module "vpc_endpoints" {
         Compliance = "PCI-DSS"
       }
     }
-    
+
     # KMS with specific subnet configuration
     kms = {
       service             = "kms"
@@ -169,20 +169,20 @@ module "vpc_endpoints" {
         Compliance = "HIPAA"
       }
     }
-    
+
     # ECR with high availability
     ecr_api = {
       service             = "ecr.api"
       private_dns_enabled = true
-      subnet_ids          = var.private_subnet_ids  # All AZs
+      subnet_ids          = var.private_subnet_ids # All AZs
     }
-    
+
     ecr_dkr = {
       service             = "ecr.dkr"
       private_dns_enabled = true
-      subnet_ids          = var.private_subnet_ids  # All AZs
+      subnet_ids          = var.private_subnet_ids # All AZs
     }
-    
+
     # Gateway endpoint with policy
     s3_gateway = {
       service         = "s3"
@@ -190,7 +190,7 @@ module "vpc_endpoints" {
       route_table_ids = var.route_table_ids
       policy          = data.aws_iam_policy_document.s3_endpoint_policy.json
     }
-    
+
     # DynamoDB gateway endpoint
     dynamodb = {
       service         = "dynamodb"
