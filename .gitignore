@@ -45,6 +45,8 @@ Thumbs.db
 docs/_build/
 docs/.doctrees/
 
+# ignore claude files
+.claude/
 
 # ignore infracost files
 .infracost/
