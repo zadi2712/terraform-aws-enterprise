@@ -3,7 +3,9 @@
     "allow": [
       "Bash(terraform fmt:*)",
       "Bash(cat:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(claude mcp add:*)",
+      "Bash(claude mcp list:*)"
     ],
     "deny": [],
     "ask": []
