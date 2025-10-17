@@ -90,14 +90,14 @@ This document establishes the Git policy and branching strategy for our organiza
 ### Supporting Branches
 
 #### 3. **feature/** (DEV)
-- **Naming Convention**: `feature/GUS-{TICKET-ID}-{short-description}`
+- **Naming Convention**: `feature/GUS-{Work-ID}-{short-description}`
 - **Example**: `feature/GUS-12345-user-authentication`
 - **Lifecycle**: Created from develop, merged back to develop
 - **Purpose**: New feature development
 - **Deployment**: Automatic to DEV environment
 
 #### 4. **bugfix/** (DEV)
-- **Naming Convention**: `bugfix/GUS-{TICKET-ID}-{short-description}`
+- **Naming Convention**: `bugfix/GUS-{Work-ID}-{short-description}`
 - **Example**: `bugfix/GUS-12346-fix-login-timeout`
 - **Lifecycle**: Created from develop, merged back to develop
 - **Purpose**: Non-critical bug fixes
@@ -111,7 +111,7 @@ This document establishes the Git policy and branching strategy for our organiza
 - **Deployment**: Manual to UAT after creation
 
 #### 6. **hotfix/** (Emergency)
-- **Naming Convention**: `hotfix/GUS-{TICKET-ID}-{short-description}`
+- **Naming Convention**: `hotfix/GUS-{Work-ID}-{short-description}`
 - **Example**: `hotfix/GUS-12347-critical-security-patch`
 - **Lifecycle**: Created from main, merged to both main and develop
 - **Purpose**: Critical production fixes
@@ -210,11 +210,11 @@ This document establishes the Git policy and branching strategy for our organiza
 All commits MUST follow this format for complete traceability:
 
 ```
-GUS-{TICKET-ID}: {TYPE}: {Short description}
+GUS-{Work-ID}: {TYPE}: {Short description}
 
 {Detailed description - optional}
 
-References: GUS-{TICKET-ID}
+References: GUS-{Work-ID}
 Related Work Items: GUS-{RELATED-ID} (optional)
 ```
 
@@ -319,7 +319,7 @@ Related Work Items: GUS-12300"
 
 All branches MUST follow the naming convention to enable automatic GUS linking:
 
-**Pattern**: `{type}/GUS-{ticket-id}-{short-description}`
+**Pattern**: `{type}/GUS-{Work-ID}-{short-description}`
 
 **Valid Examples**:
 - `feature/GUS-12345-user-dashboard`
@@ -416,7 +416,7 @@ Maintain a complete audit trail from requirement to deployment:
 
 2. **PR Title Format**
    ```
-   GUS-{TICKET-ID}: {Type}: {Short description}
+   GUS-{Work-ID}: {Type}: {Short description}
    ```
    Example: `GUS-12345: feat: Add user authentication module`
 
