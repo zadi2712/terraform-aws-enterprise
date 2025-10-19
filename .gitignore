@@ -50,3 +50,8 @@ docs/.doctrees/
 
 # ignore infracost files
 .infracost/
+
+# ignore claude files
+.claude/
+CLAUDE.md
+
