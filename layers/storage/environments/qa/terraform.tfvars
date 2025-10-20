@@ -1,26 +1,53 @@
-################################################################################
-# STORAGE Layer - QA Environment Configuration
-################################################################################
+# Storage Layer - QA Environment Configuration
+# Version: 2.0 - Enhanced with EFS support
 
-# General Configuration
-environment  = "qa"
 aws_region   = "us-east-1"
-project_name = "enterprise"
+environment  = "qa"
+project_name = "mycompany"
 
-# Instance Sizing
-instance_type     = "t3.medium"
-rds_instance_type = "db.t3.medium"
-enable_multi_az   = true
-
-# Backup Configuration
-backup_retention_days = 14
-
-# Common Tags
 common_tags = {
   Environment = "qa"
-  Project     = "enterprise-infrastructure"
+  Project     = "mycompany"
   ManagedBy   = "terraform"
   Layer       = "storage"
   CostCenter  = "engineering"
-  Owner       = "platform-team"
 }
+
+################################################################################
+# S3 Configuration
+################################################################################
+
+logs_retention_days = 14
+
+################################################################################
+# EFS Configuration - QA
+################################################################################
+
+# Enable EFS if needed
+enable_efs = false  # Set to true when needed
+
+# Performance - General Purpose
+efs_performance_mode = "generalPurpose"
+efs_throughput_mode  = "bursting"
+
+# Regional storage for QA (multi-AZ)
+efs_availability_zone_name = null
+
+# Encryption - recommended for QA
+efs_encrypted = true
+
+# Lifecycle - moderate transition
+efs_transition_to_ia                    = "AFTER_14_DAYS"
+efs_transition_to_primary_storage_class = "AFTER_1_ACCESS"
+
+# Backup - optional for QA
+efs_enable_backup_policy = false
+
+# Mount targets
+efs_create_mount_targets = true
+
+# Access points
+efs_access_points = {}
+
+# Replication - not needed for QA
+efs_enable_replication = false
