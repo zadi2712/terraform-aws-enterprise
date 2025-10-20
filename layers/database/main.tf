@@ -75,31 +75,75 @@ module "rds" {
   count  = var.create_rds ? 1 : 0
 
   identifier     = "${var.project_name}-${var.environment}-db"
-  engine         = "postgres"
+  engine         = var.rds_engine
   engine_version = var.rds_engine_version
   instance_class = var.rds_instance_type
 
+  # Storage configuration
   allocated_storage     = var.rds_allocated_storage
   max_allocated_storage = var.rds_max_allocated_storage
+  storage_type          = var.rds_storage_type
+  iops                  = var.rds_iops
+  storage_throughput    = var.rds_storage_throughput
   storage_encrypted     = true
+  kms_key_id            = try(data.terraform_remote_state.security.outputs.kms_rds_key_arn, data.terraform_remote_state.security.outputs.kms_key_arn, null)
 
+  # Database configuration
   database_name   = var.database_name
   master_username = var.master_username
-  master_password = var.master_password
+  master_password = var.rds_manage_master_password ? null : var.master_password
+  
+  # Managed master password (RDS stores in Secrets Manager)
+  manage_master_user_password   = var.rds_manage_master_password
+  master_user_secret_kms_key_id = var.rds_manage_master_password ? try(data.terraform_remote_state.security.outputs.kms_key_arn, null) : null
 
+  # Network configuration
   multi_az               = var.enable_multi_az
   db_subnet_group_name   = data.terraform_remote_state.networking.outputs.database_subnet_group_name
   vpc_security_group_ids = [module.rds_security_group.security_group_id]
+  publicly_accessible    = var.rds_publicly_accessible
 
+  # Backup configuration
   backup_retention_period = var.backup_retention_days
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = var.rds_backup_window
+  maintenance_window      = var.rds_maintenance_window
+  copy_tags_to_snapshot   = true
 
-  enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
-  performance_insights_enabled    = var.enable_performance_insights
+  # Monitoring
+  enabled_cloudwatch_logs_exports       = var.rds_cloudwatch_logs_exports
+  monitoring_interval                   = var.rds_monitoring_interval
+  create_monitoring_role                = true
+  performance_insights_enabled          = var.enable_performance_insights
+  performance_insights_kms_key_id       = var.enable_performance_insights ? try(data.terraform_remote_state.security.outputs.kms_key_arn, null) : null
+  performance_insights_retention_period = var.rds_performance_insights_retention_period
 
-  deletion_protection = var.environment == "prod"
-  skip_final_snapshot = var.environment != "prod"
+  # Upgrades
+  auto_minor_version_upgrade  = var.rds_auto_minor_version_upgrade
+  allow_major_version_upgrade = var.rds_allow_major_version_upgrade
+  apply_immediately           = var.rds_apply_immediately
+  enable_blue_green_update    = var.rds_enable_blue_green_update
+
+  # Security
+  deletion_protection                 = var.environment == "prod" ? true : var.rds_deletion_protection
+  skip_final_snapshot                 = var.environment == "prod" ? false : var.rds_skip_final_snapshot
+  iam_database_authentication_enabled = var.rds_iam_authentication_enabled
+
+  # Parameter group
+  create_parameter_group = var.rds_create_parameter_group
+  parameter_group_family = var.rds_parameter_group_family
+  parameters             = var.rds_parameters
+
+  # Option group
+  create_option_group  = var.rds_create_option_group
+  major_engine_version = var.rds_major_engine_version
+  options              = var.rds_options
+
+  # Read replicas
+  read_replicas = var.rds_read_replicas
+
+  # Secrets Manager integration
+  store_master_password_in_secrets_manager = var.rds_store_password_in_secrets_manager && !var.rds_manage_master_password
+  secrets_manager_kms_key_id               = try(data.terraform_remote_state.security.outputs.kms_key_arn, null)
 
   tags = var.common_tags
 }
