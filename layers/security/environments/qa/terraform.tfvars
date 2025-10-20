@@ -63,3 +63,19 @@ kms_enable_grant_permissions = true
 create_rds_key = false  # Set to true if you use RDS in QA
 create_s3_key  = false  # Set to true if you need separate S3 key
 create_ebs_key = true   # Enable default EBS encryption for QA
+
+################################################################################
+# IAM Configuration - Cross-Cutting Concerns (Optional)
+################################################################################
+
+enable_cross_account_roles = false
+enable_oidc_providers      = false
+enable_iam_groups          = false
+
+iam_roles          = {}
+iam_policies       = {}
+oidc_providers     = {}
+saml_providers     = {}
+iam_groups         = {}
+iam_users          = {}
+configure_password_policy = false

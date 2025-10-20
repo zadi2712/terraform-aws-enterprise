@@ -74,3 +74,32 @@ output "kms_keys_info" {
     ebs  = var.create_ebs_key ? module.kms_ebs[0].key_info : null
   }
 }
+
+################################################################################
+# IAM Outputs (Cross-Cutting Only)
+################################################################################
+
+output "iam_role_arns" {
+  description = "Map of cross-account IAM role ARNs"
+  value       = var.enable_cross_account_roles || var.enable_oidc_providers || var.enable_iam_groups ? module.iam[0].role_arns : {}
+}
+
+output "iam_policy_arns" {
+  description = "Map of custom IAM policy ARNs"
+  value       = var.enable_cross_account_roles || var.enable_oidc_providers || var.enable_iam_groups ? module.iam[0].policy_arns : {}
+}
+
+output "oidc_provider_arns" {
+  description = "Map of OIDC provider ARNs"
+  value       = var.enable_cross_account_roles || var.enable_oidc_providers || var.enable_iam_groups ? module.iam[0].oidc_provider_arns : {}
+}
+
+output "iam_group_names" {
+  description = "Map of IAM group names"
+  value       = var.enable_cross_account_roles || var.enable_oidc_providers || var.enable_iam_groups ? module.iam[0].group_names : {}
+}
+
+output "iam_summary" {
+  description = "Summary of IAM resources created"
+  value       = var.enable_cross_account_roles || var.enable_oidc_providers || var.enable_iam_groups ? module.iam[0].iam_summary : null
+}

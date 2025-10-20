@@ -82,3 +82,161 @@ create_ebs_key = true  # Enable default EBS volume encryption
 # - Regular access audits and policy reviews
 # - Document key purposes and owners
 # - Backup key policies and configurations
+
+################################################################################
+# IAM Configuration - Cross-Cutting Concerns (Production)
+################################################################################
+
+# Feature toggles
+enable_cross_account_roles = true   # Enable for audit/security accounts
+enable_oidc_providers      = true   # Enable for CI/CD
+enable_iam_groups          = false  # Prefer AWS SSO for user management
+
+# OIDC provider for GitHub Actions
+oidc_providers = {
+  github = {
+    url            = "https://token.actions.githubusercontent.com"
+    client_id_list = ["sts.amazonaws.com"]
+    thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+    
+    tags = {
+      Purpose = "cicd"
+    }
+  }
+}
+
+# Cross-account and CI/CD roles
+iam_roles = {
+  # Cross-account audit role
+  cross_account_audit = {
+    name        = "CrossAccountAuditRole"
+    description = "Read-only access from central audit account"
+    
+    assume_role_policy = jsonencode({
+      Version = "2012-10-17"
+      Statement = [{
+        Effect = "Allow"
+        Action = "sts:AssumeRole"
+        Principal = {
+          AWS = "arn:aws:iam::AUDIT_ACCOUNT_ID:root"  # Replace with audit account ID
+        }
+        Condition = {
+          StringEquals = {
+            "sts:ExternalId" = "prod-audit-external-id-2024"  # Unique per environment
+          }
+        }
+      }]
+    })
+    
+    managed_policy_arns = [
+      "arn:aws:iam::aws:policy/SecurityAudit",
+      "arn:aws:iam::aws:policy/ViewOnlyAccess"
+    ]
+    
+    max_session_duration = 43200  # 12 hours
+    
+    tags = {
+      Purpose = "audit"
+    }
+  }
+  
+  # GitHub Actions deployment role
+  github_deploy_prod = {
+    name        = "GitHubActionsDeployProd"
+    description = "Role for GitHub Actions to deploy to production"
+    
+    assume_role_policy = jsonencode({
+      Version = "2012-10-17"
+      Statement = [{
+        Effect = "Allow"
+        Principal = {
+          Federated = "arn:aws:iam::ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          }
+          StringLike = {
+            "token.actions.githubusercontent.com:sub" = "repo:YOUR_ORG/YOUR_REPO:ref:refs/heads/main"  # Only main branch
+          }
+        }
+      }]
+    })
+    
+    managed_policy_arns = [
+      "arn:aws:iam::aws:policy/PowerUserAccess"
+    ]
+    
+    # Shorter session for production security
+    max_session_duration = 1800  # 30 minutes
+    
+    tags = {
+      Purpose = "cicd"
+      Environment = "production"
+    }
+  }
+  
+  # Break-glass emergency role
+  emergency_access = {
+    name        = "EmergencyAccessRole"
+    description = "Emergency access role for critical incidents"
+    
+    assume_role_policy = jsonencode({
+      Version = "2012-10-17"
+      Statement = [{
+        Effect = "Allow"
+        Action = "sts:AssumeRole"
+        Principal = {
+          AWS = [
+            "arn:aws:iam::ACCOUNT_ID:user/emergency.user.1",
+            "arn:aws:iam::ACCOUNT_ID:user/emergency.user.2"
+          ]
+        }
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"  # Require MFA
+          }
+        }
+      }]
+    })
+    
+    managed_policy_arns = [
+      "arn:aws:iam::aws:policy/AdministratorAccess"
+    ]
+    
+    max_session_duration = 3600  # 1 hour max
+    
+    tags = {
+      Purpose = "emergency"
+      Critical = "true"
+    }
+  }
+}
+
+# Custom policies
+iam_policies = {}
+
+# SAML providers (if using SSO)
+saml_providers = {}
+
+# IAM groups (prefer AWS SSO)
+iam_groups = {}
+
+# IAM users (prefer AWS SSO)
+iam_users = {}
+
+# Password policy for production
+configure_password_policy = true
+
+password_policy = {
+  minimum_password_length        = 16  # Stronger for production
+  require_lowercase_characters   = true
+  require_numbers                = true
+  require_uppercase_characters   = true
+  require_symbols                = true
+  allow_users_to_change_password = true
+  max_password_age               = 90
+  password_reuse_prevention      = 24
+  hard_expiry                    = false
+}

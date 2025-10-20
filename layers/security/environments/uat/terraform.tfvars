@@ -66,3 +66,69 @@ kms_enable_grant_permissions = true
 create_rds_key = true  # Dedicated key for RDS
 create_s3_key  = true  # Dedicated key for S3
 create_ebs_key = true  # Enable default EBS encryption
+
+################################################################################
+# IAM Configuration - Cross-Cutting Concerns
+################################################################################
+
+# Enable OIDC for CI/CD in UAT
+enable_cross_account_roles = false
+enable_oidc_providers      = true  # Enable for automated deployments
+enable_iam_groups          = false
+
+# OIDC provider for GitHub Actions
+oidc_providers = {
+  github = {
+    url            = "https://token.actions.githubusercontent.com"
+    client_id_list = ["sts.amazonaws.com"]
+    thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+    
+    tags = {
+      Purpose = "cicd"
+    }
+  }
+}
+
+# GitHub Actions deployment role
+iam_roles = {
+  github_deploy_uat = {
+    name        = "GitHubActionsDeployUAT"
+    description = "Role for GitHub Actions to deploy to UAT"
+    
+    assume_role_policy = jsonencode({
+      Version = "2012-10-17"
+      Statement = [{
+        Effect = "Allow"
+        Principal = {
+          Federated = "arn:aws:iam::ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          }
+          StringLike = {
+            "token.actions.githubusercontent.com:sub" = "repo:YOUR_ORG/YOUR_REPO:*"
+          }
+        }
+      }]
+    })
+    
+    managed_policy_arns = [
+      "arn:aws:iam::aws:policy/PowerUserAccess"
+    ]
+    
+    max_session_duration = 3600
+    
+    tags = {
+      Purpose = "cicd"
+      Environment = "uat"
+    }
+  }
+}
+
+iam_policies       = {}
+saml_providers     = {}
+iam_groups         = {}
+iam_users          = {}
+configure_password_policy = false

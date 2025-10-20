@@ -62,3 +62,58 @@ kms_enable_grant_permissions = true
 create_rds_key = false  # Set to true if you use RDS in dev
 create_s3_key  = false  # Set to true if you need separate S3 key
 create_ebs_key = false  # Set to true to enable default EBS encryption
+
+################################################################################
+# IAM Configuration - Cross-Cutting Concerns (Optional)
+################################################################################
+
+# Feature toggles
+enable_cross_account_roles = false  # Enable for cross-account access
+enable_oidc_providers      = false  # Enable for CI/CD (GitHub Actions, etc.)
+enable_iam_groups          = false  # Enable for user management (prefer SSO)
+
+# Cross-account roles (example - disabled by default)
+iam_roles = {
+  # Example: Cross-account access from audit account
+  # cross_account_audit = {
+  #   name        = "CrossAccountAudit"
+  #   description = "Read-only access from audit account"
+  #   
+  #   assume_role_policy = jsonencode({
+  #     Version = "2012-10-17"
+  #     Statement = [{
+  #       Action = "sts:AssumeRole"
+  #       Principal = {
+  #         AWS = "arn:aws:iam::AUDIT_ACCOUNT_ID:root"
+  #       }
+  #       Condition = {
+  #         StringEquals = {
+  #           "sts:ExternalId" = "unique-external-id"
+  #         }
+  #       }
+  #     }]
+  #   })
+  #   
+  #   managed_policy_arns = [
+  #     "arn:aws:iam::aws:policy/ViewOnlyAccess"
+  #   ]
+  # }
+}
+
+# Custom IAM policies
+iam_policies = {}
+
+# OIDC providers (for GitHub Actions, GitLab, etc.)
+oidc_providers = {}
+
+# SAML providers (for SSO)
+saml_providers = {}
+
+# IAM groups (prefer AWS SSO)
+iam_groups = {}
+
+# IAM users (prefer AWS SSO)
+iam_users = {}
+
+# Password policy (optional)
+configure_password_policy = false

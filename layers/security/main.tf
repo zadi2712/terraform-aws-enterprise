@@ -155,6 +155,39 @@ module "kms_ebs" {
 data "aws_caller_identity" "current" {}
 
 ################################################################################
+# IAM Cross-Cutting Roles (Optional)
+################################################################################
+
+module "iam" {
+  source = "../../../modules/iam"
+  count  = var.enable_cross_account_roles || var.enable_oidc_providers || var.enable_iam_groups ? 1 : 0
+
+  # Cross-account and org-wide roles
+  roles = var.iam_roles
+
+  # Custom policies
+  policies = var.iam_policies
+
+  # OIDC providers (GitHub Actions, GitLab, etc.)
+  oidc_providers = var.oidc_providers
+
+  # SAML providers (SSO)
+  saml_providers = var.saml_providers
+
+  # IAM groups
+  groups = var.iam_groups
+
+  # IAM users (use SSO instead when possible)
+  users = var.iam_users
+
+  # Account password policy
+  configure_password_policy = var.configure_password_policy
+  password_policy           = var.password_policy
+
+  tags = var.common_tags
+}
+
+################################################################################
 # Store Outputs in SSM Parameter Store
 ################################################################################
 
