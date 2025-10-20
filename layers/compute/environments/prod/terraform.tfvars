@@ -270,3 +270,35 @@ bastion_allowed_cidrs = ["10.0.0.0/16"] # Restrict to corporate network only
 bastion_allocate_eip            = true   # Static IP for production
 bastion_enable_cloudwatch_agent = true   # Full monitoring in production
 bastion_root_volume_size        = 30     # Larger volume for logs
+
+################################################################################
+# Lambda Configuration - Production
+################################################################################
+
+# Infrastructure Lambda functions (optional)
+# Note: Application-specific Lambdas should be deployed separately
+enable_lambda_infrastructure_functions = false  # Enable if needed
+enable_health_check_lambda            = false  # Example infrastructure function
+
+# Lambda global settings for production
+lambda_log_retention_days  = 30    # Longer retention for production
+lambda_enable_xray_tracing = true  # Enable tracing for debugging
+lambda_use_arm64           = true  # 20% cost savings with ARM64
+
+# Health check Lambda configuration example (if enabled)
+# lambda_health_check_filename = "lambda/health-check.zip"
+# lambda_health_check_handler  = "index.handler"
+# lambda_health_check_runtime  = "python3.11"
+# lambda_health_check_memory   = 256  # More memory for production
+# lambda_health_check_timeout  = 60   # Longer timeout
+# lambda_health_check_vpc_enabled = true  # Deploy in VPC for security
+
+# lambda_health_check_policy_arns = {
+#   cloudwatch = "arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess"
+#   ec2        = "arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"
+# }
+
+# lambda_health_check_environment_variables = {
+#   ALERT_SNS_TOPIC = "arn:aws:sns:us-east-1:ACCOUNT_ID:alerts"
+#   CHECK_INTERVAL  = "300"
+# }

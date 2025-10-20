@@ -359,6 +359,92 @@ module "bastion_security_group" {
   tags = var.common_tags
 }
 
+################################################################################
+# Lambda Functions (Optional Infrastructure Functions)
+################################################################################
+
+# Security Group for Lambda functions in VPC
+module "lambda_security_group" {
+  source = "../../../modules/security-group"
+  count  = var.enable_lambda_infrastructure_functions ? 1 : 0
+
+  name        = "${var.project_name}-${var.environment}-lambda-sg"
+  description = "Security group for Lambda functions"
+  vpc_id      = data.terraform_remote_state.networking.outputs.vpc_id
+
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow all outbound traffic"
+    }
+  ]
+
+  tags = var.common_tags
+}
+
+# Example: Infrastructure Lambda functions can be added here
+# Note: Application-specific Lambda functions should be deployed
+# separately as part of your application's Terraform code
+
+# Example infrastructure function (optional)
+module "health_check_lambda" {
+  source = "../../../modules/lambda"
+  count  = var.enable_health_check_lambda ? 1 : 0
+
+  function_name = "${var.project_name}-${var.environment}-health-check"
+  description   = "Health check function for infrastructure monitoring"
+
+  # Package configuration
+  filename = var.lambda_health_check_filename
+  handler  = var.lambda_health_check_handler
+  runtime  = var.lambda_health_check_runtime
+
+  # Resources
+  memory_size = var.lambda_health_check_memory
+  timeout     = var.lambda_health_check_timeout
+
+  # VPC configuration (optional)
+  vpc_config = var.lambda_health_check_vpc_enabled ? {
+    subnet_ids         = data.terraform_remote_state.networking.outputs.private_subnet_ids
+    security_group_ids = [module.lambda_security_group[0].security_group_id]
+  } : null
+
+  # IAM
+  create_role = true
+
+  attach_policy_arns = var.lambda_health_check_policy_arns
+
+  # Environment
+  environment_variables = merge(
+    {
+      ENVIRONMENT  = var.environment
+      PROJECT_NAME = var.project_name
+    },
+    var.lambda_health_check_environment_variables
+  )
+
+  # Logging
+  create_log_group   = true
+  log_retention_days = var.lambda_log_retention_days
+  log_kms_key_id     = try(data.terraform_remote_state.security.outputs.kms_key_arn, null)
+
+  # Tracing
+  tracing_mode = var.lambda_enable_xray_tracing ? "Active" : null
+
+  # ARM64 for cost savings
+  architectures = var.lambda_use_arm64 ? ["arm64"] : ["x86_64"]
+
+  tags = merge(
+    var.common_tags,
+    {
+      Type = "infrastructure-function"
+    }
+  )
+}
+
 
 ################################################################################
 # Store Outputs in SSM Parameter Store
@@ -409,6 +495,12 @@ module "ssm_outputs" {
     bastion_instance_id       = var.enable_bastion ? module.bastion[0].instance_id : null
     bastion_public_ip         = var.enable_bastion ? module.bastion[0].public_ip : null
     bastion_security_group_id = var.enable_bastion ? module.bastion_security_group[0].security_group_id : null
+
+    # Lambda
+    lambda_health_check_function_arn  = var.enable_health_check_lambda ? module.health_check_lambda[0].function_arn : null
+    lambda_health_check_function_name = var.enable_health_check_lambda ? module.health_check_lambda[0].function_name : null
+    lambda_health_check_role_arn      = var.enable_health_check_lambda ? module.health_check_lambda[0].role_arn : null
+    lambda_security_group_id          = var.enable_lambda_infrastructure_functions ? module.lambda_security_group[0].security_group_id : null
   }
 
   output_descriptions = {
@@ -440,6 +532,10 @@ module "ssm_outputs" {
     bastion_instance_id                        = "Bastion host EC2 instance ID"
     bastion_public_ip                          = "Bastion host public IP address"
     bastion_security_group_id                  = "Bastion host security group ID"
+    lambda_health_check_function_arn           = "Lambda health check function ARN"
+    lambda_health_check_function_name          = "Lambda health check function name"
+    lambda_health_check_role_arn               = "Lambda health check execution role ARN"
+    lambda_security_group_id                   = "Lambda functions security group ID"
   }
 
   tags = var.common_tags
@@ -449,6 +545,7 @@ module "ssm_outputs" {
     module.eks_cluster,
     module.ecs_cluster,
     module.alb,
-    module.bastion
+    module.bastion,
+    module.health_check_lambda
   ]
 }

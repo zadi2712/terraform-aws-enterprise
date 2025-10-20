@@ -148,3 +148,24 @@ bastion_allowed_cidrs = ["10.0.0.0/8"] # Your VPN/Office CIDR
 bastion_allocate_eip            = true   # Static IP for easy access
 bastion_enable_cloudwatch_agent = false  # Disable in dev to save costs
 bastion_root_volume_size        = 20     # GB
+
+################################################################################
+# Lambda Configuration - Development
+################################################################################
+
+# Lambda infrastructure functions (optional)
+enable_lambda_infrastructure_functions = false  # Enable if needed
+enable_health_check_lambda            = false  # Example function
+
+# Lambda global settings
+lambda_log_retention_days   = 3     # Short retention for dev
+lambda_enable_xray_tracing  = false # Disable to save costs
+lambda_use_arm64            = true  # 20% cost savings
+
+# Health check Lambda configuration (if enabled)
+# lambda_health_check_filename = "lambda/health-check.zip"
+# lambda_health_check_handler  = "index.handler"
+# lambda_health_check_runtime  = "python3.11"
+# lambda_health_check_memory   = 128
+# lambda_health_check_timeout  = 30
+# lambda_health_check_vpc_enabled = false

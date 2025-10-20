@@ -247,6 +247,35 @@ output "bastion_security_group_id" {
   value       = var.enable_bastion ? module.bastion_security_group[0].security_group_id : null
 }
 
+################################################################################
+# Lambda Outputs (Infrastructure Functions)
+################################################################################
+
+output "lambda_health_check_function_arn" {
+  description = "Lambda health check function ARN"
+  value       = var.enable_health_check_lambda ? module.health_check_lambda[0].function_arn : null
+}
+
+output "lambda_health_check_function_name" {
+  description = "Lambda health check function name"
+  value       = var.enable_health_check_lambda ? module.health_check_lambda[0].function_name : null
+}
+
+output "lambda_health_check_role_arn" {
+  description = "Lambda health check execution role ARN"
+  value       = var.enable_health_check_lambda ? module.health_check_lambda[0].role_arn : null
+}
+
+output "lambda_health_check_log_group" {
+  description = "Lambda health check CloudWatch log group name"
+  value       = var.enable_health_check_lambda ? module.health_check_lambda[0].log_group_name : null
+}
+
+output "lambda_security_group_id" {
+  description = "Lambda functions security group ID"
+  value       = var.enable_lambda_infrastructure_functions ? module.lambda_security_group[0].security_group_id : null
+}
+
 
 ################################################################################
 # ECR SSM Parameter Store Outputs

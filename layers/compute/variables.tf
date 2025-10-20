@@ -358,3 +358,85 @@ variable "bastion_root_volume_size" {
   type        = number
   default     = 20
 }
+
+################################################################################
+# Lambda Configuration
+################################################################################
+
+variable "enable_lambda_infrastructure_functions" {
+  description = "Enable Lambda infrastructure functions (health checks, cleanup tasks)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_health_check_lambda" {
+  description = "Enable health check Lambda function"
+  type        = bool
+  default     = false
+}
+
+variable "lambda_health_check_filename" {
+  description = "Path to Lambda health check deployment package"
+  type        = string
+  default     = null
+}
+
+variable "lambda_health_check_handler" {
+  description = "Lambda health check handler"
+  type        = string
+  default     = "index.handler"
+}
+
+variable "lambda_health_check_runtime" {
+  description = "Lambda health check runtime"
+  type        = string
+  default     = "python3.11"
+}
+
+variable "lambda_health_check_memory" {
+  description = "Lambda health check memory in MB"
+  type        = number
+  default     = 128
+}
+
+variable "lambda_health_check_timeout" {
+  description = "Lambda health check timeout in seconds"
+  type        = number
+  default     = 30
+}
+
+variable "lambda_health_check_vpc_enabled" {
+  description = "Enable VPC configuration for Lambda health check"
+  type        = bool
+  default     = false
+}
+
+variable "lambda_health_check_policy_arns" {
+  description = "Additional IAM policy ARNs for Lambda health check"
+  type        = map(string)
+  default     = {}
+}
+
+variable "lambda_health_check_environment_variables" {
+  description = "Additional environment variables for Lambda health check"
+  type        = map(string)
+  default     = {}
+}
+
+variable "lambda_log_retention_days" {
+  description = "CloudWatch log retention for Lambda functions"
+  type        = number
+  default     = 7
+}
+
+variable "lambda_enable_xray_tracing" {
+  description = "Enable X-Ray tracing for Lambda functions"
+  type        = bool
+  default     = false
+}
+
+variable "lambda_use_arm64" {
+  description = "Use ARM64 architecture for Lambda (20% cost savings)"
+  type        = bool
+  default     = true
+}

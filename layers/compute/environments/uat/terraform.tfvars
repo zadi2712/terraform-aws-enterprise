@@ -173,3 +173,14 @@ bastion_allowed_cidrs = ["10.0.0.0/16"]
 bastion_allocate_eip            = true
 bastion_enable_cloudwatch_agent = true  # Enable monitoring in UAT
 bastion_root_volume_size        = 20
+
+################################################################################
+# Lambda Configuration - UAT
+################################################################################
+
+enable_lambda_infrastructure_functions = false  # Enable if needed
+enable_health_check_lambda            = false
+
+lambda_log_retention_days  = 14
+lambda_enable_xray_tracing = true  # Enable tracing in UAT
+lambda_use_arm64           = true
