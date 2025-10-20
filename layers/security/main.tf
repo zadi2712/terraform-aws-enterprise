@@ -155,33 +155,6 @@ module "kms_ebs" {
 data "aws_caller_identity" "current" {}
 
 ################################################################################
-# IAM Roles
-################################################################################
-
-resource "aws_iam_role" "ecs_task_execution" {
-  name = "${var.project_name}-${var.environment}-ecs-task-execution"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "ecs-tasks.amazonaws.com"
-      }
-    }]
-  })
-
-  tags = var.common_tags
-}
-
-resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
-  role       = aws_iam_role.ecs_task_execution.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-
-################################################################################
 # Store Outputs in SSM Parameter Store
 ################################################################################
 
@@ -210,10 +183,6 @@ module "ssm_outputs" {
     # EBS KMS key
     kms_ebs_key_id       = var.create_ebs_key ? module.kms_ebs[0].key_id : null
     kms_ebs_key_arn      = var.create_ebs_key ? module.kms_ebs[0].key_arn : null
-    
-    # IAM roles
-    ecs_task_execution_role_arn  = aws_iam_role.ecs_task_execution.arn
-    ecs_task_execution_role_name = aws_iam_role.ecs_task_execution.name
   }
 
   output_descriptions = {
@@ -227,8 +196,6 @@ module "ssm_outputs" {
     kms_s3_key_arn       = "S3 KMS key ARN"
     kms_ebs_key_id       = "EBS KMS key ID"
     kms_ebs_key_arn      = "EBS KMS key ARN"
-    ecs_task_execution_role_arn  = "ECS task execution IAM role ARN"
-    ecs_task_execution_role_name = "ECS task execution IAM role name"
   }
 
   tags = var.common_tags
@@ -237,7 +204,6 @@ module "ssm_outputs" {
     module.kms_main,
     module.kms_rds,
     module.kms_s3,
-    module.kms_ebs,
-    aws_iam_role.ecs_task_execution
+    module.kms_ebs
   ]
 }
