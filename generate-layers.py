@@ -15,11 +15,11 @@ LAYERS_CONFIG = {
 ################################################################################
 
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.13.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
   }
   backend "s3" {
@@ -143,11 +143,11 @@ output "alb_security_group_id" {
 }
 ''',
         "versions.tf": '''terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.13.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
   }
 }
@@ -160,11 +160,11 @@ output "alb_security_group_id" {
 ################################################################################
 
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.13.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
   }
   backend "s3" {
@@ -359,11 +359,11 @@ output "rds_instance_id" {
 }
 ''',
         "versions.tf": '''terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.13.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
   }
 }
@@ -376,11 +376,11 @@ output "rds_instance_id" {
 ################################################################################
 
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.13.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
   }
   backend "s3" {
@@ -484,11 +484,11 @@ output "logs_bucket_id" {
 }
 ''',
         "versions.tf": '''terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.13.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
   }
 }
@@ -501,11 +501,11 @@ output "logs_bucket_id" {
 ################################################################################
 
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.13.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
   }
   backend "s3" {
@@ -600,11 +600,11 @@ output "ecs_task_execution_role_arn" {
 }
 ''',
         "versions.tf": '''terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.13.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
   }
 }
@@ -617,11 +617,11 @@ output "ecs_task_execution_role_arn" {
 ################################################################################
 
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.13.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
   }
   backend "s3" {
@@ -686,11 +686,11 @@ output "name_servers" {
 }
 ''',
         "versions.tf": '''terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.13.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
   }
 }
@@ -703,11 +703,11 @@ output "name_servers" {
 ################################################################################
 
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.13.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
   }
   backend "s3" {
@@ -795,11 +795,11 @@ output "log_group_name" {
 }
 ''',
         "versions.tf": '''terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.13.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
   }
 }
