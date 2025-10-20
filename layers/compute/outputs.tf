@@ -227,6 +227,21 @@ output "bastion_public_ip" {
   value       = var.enable_bastion ? module.bastion[0].public_ip : null
 }
 
+output "bastion_private_ip" {
+  description = "Bastion private IP"
+  value       = var.enable_bastion ? module.bastion[0].private_ip : null
+}
+
+output "bastion_eip" {
+  description = "Bastion Elastic IP (if allocated)"
+  value       = var.enable_bastion && var.bastion_allocate_eip ? try(module.bastion[0].eip_public_ips[0], null) : null
+}
+
+output "bastion_iam_role_arn" {
+  description = "Bastion IAM role ARN"
+  value       = var.enable_bastion ? module.bastion[0].iam_role_arn : null
+}
+
 output "bastion_security_group_id" {
   description = "Bastion security group ID"
   value       = var.enable_bastion ? module.bastion_security_group[0].security_group_id : null

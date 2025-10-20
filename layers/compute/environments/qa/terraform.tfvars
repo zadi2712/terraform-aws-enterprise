@@ -162,9 +162,14 @@ ecs_enable_execute_command = true
 ecs_log_retention_days     = 7
 
 ################################################################################
-# Bastion Configuration
+# Bastion Configuration - QA
 ################################################################################
 
 bastion_instance_type = "t3.micro"
 bastion_key_name      = "qa-bastion-key"
 bastion_allowed_cidrs = ["10.0.0.0/8"]
+
+# Bastion storage and monitoring
+bastion_allocate_eip            = true
+bastion_enable_cloudwatch_agent = false
+bastion_root_volume_size        = 20

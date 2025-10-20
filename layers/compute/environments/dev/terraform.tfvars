@@ -137,9 +137,14 @@ ecs_enable_execute_command = true
 ecs_log_retention_days     = 3
 
 ################################################################################
-# Bastion Configuration
+# Bastion Configuration - Development
 ################################################################################
 
 bastion_instance_type = "t3.micro"
 bastion_key_name      = "dev-bastion-key"
 bastion_allowed_cidrs = ["10.0.0.0/8"] # Your VPN/Office CIDR
+
+# Bastion storage and monitoring
+bastion_allocate_eip            = true   # Static IP for easy access
+bastion_enable_cloudwatch_agent = false  # Disable in dev to save costs
+bastion_root_volume_size        = 20     # GB

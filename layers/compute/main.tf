@@ -282,15 +282,42 @@ module "bastion" {
   instance_type = var.bastion_instance_type
   ami_id        = var.bastion_ami_id
   
-  subnet_id              = data.terraform_remote_state.networking.outputs.public_subnet_ids[0]
-  vpc_security_group_ids = [module.bastion_security_group[0].security_group_id]
+  # Instance configuration
+  create_instance = true
+  instance_count  = 1
   
-  key_name                    = var.bastion_key_name
+  # Network configuration
+  subnet_id                   = data.terraform_remote_state.networking.outputs.public_subnet_ids[0]
+  vpc_security_group_ids      = [module.bastion_security_group[0].security_group_id]
   associate_public_ip_address = true
+  allocate_eip                = var.bastion_allocate_eip
   
+  # SSH key
+  key_name = var.bastion_key_name
+  
+  # IAM instance profile for SSM
+  create_iam_instance_profile = true
+  enable_ssm_management       = true
+  enable_cloudwatch_agent     = var.bastion_enable_cloudwatch_agent
+  
+  # Storage
+  root_volume_size      = var.bastion_root_volume_size
+  root_volume_type      = "gp3"
+  root_volume_encrypted = true
+  ebs_kms_key_id        = try(data.terraform_remote_state.security.outputs.kms_ebs_key_arn, null)
+  
+  # Monitoring
   enable_monitoring = true
   
-  user_data = var.bastion_user_data
+  # Metadata security
+  require_imdsv2 = true
+  
+  # User data
+  user_data = var.bastion_user_data != null ? var.bastion_user_data : base64encode(templatefile("${path.module}/../../modules/ec2/user_data.sh", {
+    environment  = var.environment
+    project_name = var.project_name
+    application  = "bastion"
+  }))
   
   tags = merge(
     var.common_tags,

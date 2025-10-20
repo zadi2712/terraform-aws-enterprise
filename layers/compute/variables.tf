@@ -336,7 +336,25 @@ variable "bastion_allowed_cidrs" {
 }
 
 variable "bastion_user_data" {
-  description = "User data script for bastion host"
+  description = "User data script for bastion host (base64 encoded)"
   type        = string
   default     = null
+}
+
+variable "bastion_allocate_eip" {
+  description = "Allocate Elastic IP for bastion host"
+  type        = bool
+  default     = true
+}
+
+variable "bastion_enable_cloudwatch_agent" {
+  description = "Enable CloudWatch agent on bastion host"
+  type        = bool
+  default     = false
+}
+
+variable "bastion_root_volume_size" {
+  description = "Root volume size for bastion host (GB)"
+  type        = number
+  default     = 20
 }

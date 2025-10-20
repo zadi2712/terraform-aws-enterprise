@@ -162,9 +162,14 @@ ecs_enable_execute_command = false
 ecs_log_retention_days     = 14
 
 ################################################################################
-# Bastion Configuration
+# Bastion Configuration - UAT
 ################################################################################
 
 bastion_instance_type = "t3.micro"
 bastion_key_name      = "uat-bastion-key"
 bastion_allowed_cidrs = ["10.0.0.0/16"]
+
+# Bastion storage and monitoring
+bastion_allocate_eip            = true
+bastion_enable_cloudwatch_agent = true  # Enable monitoring in UAT
+bastion_root_volume_size        = 20

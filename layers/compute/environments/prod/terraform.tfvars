@@ -259,9 +259,14 @@ ecs_enable_execute_command = false
 ecs_log_retention_days     = 30
 
 ################################################################################
-# Bastion Configuration
+# Bastion Configuration - Production
 ################################################################################
 
 bastion_instance_type = "t3.micro"
 bastion_key_name      = "prod-bastion-key"
 bastion_allowed_cidrs = ["10.0.0.0/16"] # Restrict to corporate network only
+
+# Bastion storage and monitoring
+bastion_allocate_eip            = true   # Static IP for production
+bastion_enable_cloudwatch_agent = true   # Full monitoring in production
+bastion_root_volume_size        = 30     # Larger volume for logs
