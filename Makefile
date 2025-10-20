@@ -3,6 +3,56 @@
 # Description: Convenient commands for managing infrastructure
 ################################################################################
 
+.PHONY: help init plan apply destroy validate fmt lint clean test docs drift-check drift-check-all drift-check-prod drift-report drift-fix
+
+################################################################################
+# Drift Detection Targets
+################################################################################
+
+drift-check:
+	@echo "🔍 Running drift detection for $(LAYER)/$(ENV)..."
+	@./scripts/drift-detection.sh $(LAYER) $(ENV)
+
+drift-check-all:
+	@echo "🔍 Running comprehensive drift detection..."
+	@./scripts/drift-detection.sh all all
+
+drift-check-prod:
+	@echo "🔍 Running drift detection for production..."
+	@./scripts/drift-detection.sh all prod
+
+drift-report:
+	@echo "📊 Drift Detection Reports:"
+	@echo ""
+	@if [ -d "drift-reports" ]; then \
+		ls -lht drift-reports/*.txt 2>/dev/null | head -10 || echo "  No drift reports found"; \
+		echo ""; \
+		echo "View changelog: cat drift-reports/CHANGELOG.md"; \
+	else \
+		echo "  No drift reports directory found"; \
+	fi
+
+drift-fix:
+	@echo "⚙️ Applying Terraform to fix drift in $(LAYER)/$(ENV)..."
+	@cd layers/$(LAYER)/environments/$(ENV) && terraform apply -auto-approve
+
+drift-help:
+	@echo "Drift Detection Commands:"
+	@echo "  make drift-check LAYER=compute ENV=prod  - Check specific layer/environment"
+	@echo "  make drift-check-all                      - Check all infrastructure"
+	@echo "  make drift-check-prod                     - Check production only"
+	@echo "  make drift-report                         - View drift reports"
+	@echo "  make drift-fix LAYER=x ENV=y              - Fix drift (apply Terraform)"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make drift-check LAYER=security ENV=prod"
+	@echo "  make drift-check-all"
+	@echo "  ./scripts/drift-detection.sh compute prod"
+
+################################################################################
+# Existing Targets
+################################################################################
+
 .PHONY: help init plan apply destroy validate fmt lint clean test docs
 
 # Default target

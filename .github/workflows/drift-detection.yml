@@ -1,0 +1,364 @@
+name: Terraform Drift Detection
+
+on:
+  schedule:
+    # Run daily at 6 AM UTC
+    - cron: '0 6 * * *'
+  
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to check'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - dev
+          - qa
+          - uat
+          - prod
+      
+      layer:
+        description: 'Layer to check'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - security
+          - networking
+          - storage
+          - database
+          - monitoring
+          - compute
+          - dns
+
+permissions:
+  id-token: write      # Required for OIDC
+  contents: read       # Read repository
+  pull-requests: write # Create PRs (optional)
+  issues: write        # Create issues
+
+env:
+  TF_VERSION: "1.13.4"
+  AWS_REGION: "us-east-1"
+
+jobs:
+  detect-drift:
+    name: Drift Check - ${{ matrix.layer }}/${{ matrix.environment }}
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        layer:
+          - security
+          - networking
+          - storage
+          - database
+          - monitoring
+          - compute
+        
+        environment:
+          - dev
+          - qa
+          - uat
+          - prod
+    
+    # Skip based on workflow inputs
+    if: |
+      (github.event_name == 'schedule') ||
+      (github.event.inputs.environment == 'all' || github.event.inputs.environment == matrix.environment) &&
+      (github.event.inputs.layer == 'all' || github.event.inputs.layer == matrix.layer)
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets[format('AWS_ROLE_ARN_{0}', matrix.environment)] || secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GHA-Drift-${{ matrix.layer }}-${{ matrix.environment }}-${{ github.run_id }}
+      
+      - name: Terraform Init
+        id: init
+        working-directory: layers/${{ matrix.layer }}/environments/${{ matrix.environment }}
+        run: terraform init -backend-config=backend.conf
+        continue-on-error: true
+      
+      - name: Terraform Plan (Detect Drift)
+        id: plan
+        working-directory: layers/${{ matrix.layer }}/environments/${{ matrix.environment }}
+        run: |
+          set +e
+          terraform plan -detailed-exitcode -no-color -out=tfplan > plan-output.txt 2>&1
+          PLAN_EXIT_CODE=$?
+          
+          echo "exit_code=$PLAN_EXIT_CODE" >> $GITHUB_OUTPUT
+          
+          if [ $PLAN_EXIT_CODE -eq 0 ]; then
+            echo "drift_detected=false" >> $GITHUB_OUTPUT
+            echo "✅ No drift detected"
+          elif [ $PLAN_EXIT_CODE -eq 1 ]; then
+            echo "drift_detected=error" >> $GITHUB_OUTPUT
+            echo "❌ Error running terraform plan"
+            cat plan-output.txt
+          elif [ $PLAN_EXIT_CODE -eq 2 ]; then
+            echo "drift_detected=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Drift detected!"
+            cat plan-output.txt
+          fi
+          
+          exit 0
+      
+      - name: Parse Drift Details
+        if: steps.plan.outputs.drift_detected == 'true'
+        id: drift
+        working-directory: layers/${{ matrix.layer }}/environments/${{ matrix.environment }}
+        run: |
+          # Extract resource changes
+          RESOURCES_CHANGED=$(grep -c "will be" plan-output.txt || echo "0")
+          echo "resources_changed=$RESOURCES_CHANGED" >> $GITHUB_OUTPUT
+          
+          # Check for critical resources
+          if grep -q "aws_kms_key\|aws_iam_role\|aws_db_instance" plan-output.txt; then
+            echo "critical=true" >> $GITHUB_OUTPUT
+          else
+            echo "critical=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create Drift Issue
+        if: steps.plan.outputs.drift_detected == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const layer = '${{ matrix.layer }}';
+            const env = '${{ matrix.environment }}';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const critical = '${{ steps.drift.outputs.critical }}' === 'true';
+            const resourcesChanged = '${{ steps.drift.outputs.resources_changed }}';
+            
+            const severity = critical ? '🚨 CRITICAL' : '⚠️ WARNING';
+            const title = `${severity} Drift Detected: ${layer}/${env}`;
+            
+            const body = `
+            ## ${severity} Infrastructure Drift Detected
+            
+            **Layer:** \`${layer}\`  
+            **Environment:** \`${env}\`  
+            **Severity:** ${critical ? '🚨 CRITICAL' : '⚠️ Warning'}  
+            **Resources Changed:** ${resourcesChanged}  
+            **Detection Time:** ${new Date().toISOString()}  
+            **Workflow Run:** [View Details](${runUrl})
+            
+            ---
+            
+            ### What Happened?
+            
+            Manual changes were detected in AWS that don't match the Terraform state.
+            
+            **Possible causes:**
+            - Manual changes via AWS Console
+            - Changes via AWS CLI/SDK
+            - Emergency hotfixes
+            - Other automation tools
+            - Configuration drift
+            
+            ${critical ? '### ⚠️ CRITICAL RESOURCES AFFECTED\n\nThis drift affects critical infrastructure components (KMS keys, IAM roles, or databases). **Immediate action required.**\n' : ''}
+            
+            ---
+            
+            ### Action Required
+            
+            **Priority:** ${critical ? 'HIGH - Review immediately' : 'NORMAL - Review within 24 hours'}
+            
+            **Steps:**
+            
+            1. **Review Changes**
+               - Check the [workflow run](${runUrl}) for detailed plan output
+               - Identify what changed and why
+            
+            2. **Investigate**
+               \`\`\`bash
+               # Check CloudTrail for who made changes
+               aws cloudtrail lookup-events \\
+                 --lookup-attributes AttributeKey=ResourceType,AttributeValue=AWS::EC2::Instance \\
+                 --max-results 10
+               \`\`\`
+            
+            3. **Choose Resolution**
+               
+               **Option A: Update Terraform (keep AWS changes)**
+               \`\`\`bash
+               cd layers/${layer}/environments/${env}
+               # Update .tf or .tfvars files to match AWS
+               terraform plan  # Verify no changes
+               git commit -m "Update Terraform to match AWS state"
+               \`\`\`
+               
+               **Option B: Revert AWS (keep Terraform)**
+               \`\`\`bash
+               cd layers/${layer}/environments/${env}
+               terraform apply  # Reverts AWS to match Terraform
+               \`\`\`
+            
+            4. **Document Resolution**
+               - Update \`drift-reports/CHANGELOG.md\`
+               - Note what changed and why
+               - Document who approved the change
+            
+            5. **Close This Issue**
+               - After drift is resolved
+               - Add comment with resolution details
+            
+            ---
+            
+            ### Prevent Future Drift
+            
+            - ✅ All changes should go through Terraform
+            - ✅ Emergency changes require follow-up PR
+            - ✅ Use \`make drift-check-prod\` before releases
+            - ✅ Review this guide: [Drift Detection Guide](../blob/main/DRIFT_DETECTION_GUIDE.md)
+            
+            ---
+            
+            *This issue was automatically created by the drift detection pipeline.*  
+            *See workflow: [\`drift-detection.yml\`](../blob/main/.github/workflows/drift-detection.yml)*
+            `;
+            
+            // Check if issue already exists
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: ['drift-detection', `layer:${layer}`, `env:${env}`]
+            });
+            
+            if (existingIssues.data.length === 0) {
+              // Create new issue
+              const issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: [
+                  'drift-detection',
+                  `layer:${layer}`,
+                  `env:${env}`,
+                  'infrastructure',
+                  critical ? 'critical' : 'warning'
+                ]
+              });
+              
+              core.info(`Created issue #${issue.data.number}`);
+              
+              // Add to project board if exists
+              if (context.payload.repository.has_projects) {
+                core.info('Issue created and can be added to project board');
+              }
+            } else {
+              // Update existing issue
+              const issue = existingIssues.data[0];
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `🔄 **Drift still detected** as of ${new Date().toISOString()}\n\n**Resources Changed:** ${resourcesChanged}\n\n[Latest Detection Run](${runUrl})`
+              });
+              
+              core.info(`Updated existing issue #${issue.number}`);
+            }
+      
+      - name: Comment on PR if Exists
+        if: steps.plan.outputs.drift_detected == 'true' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `### ⚠️ Drift Detected in ${{ matrix.layer }}/${{ matrix.environment }}
+            
+            Terraform plan detected changes that indicate drift.
+            
+            <details>
+            <summary>Show Plan Output</summary>
+            
+            \`\`\`terraform
+            ${process.env.PLAN_OUTPUT}
+            \`\`\`
+            
+            </details>
+            
+            **Action:** Review drift before merging this PR.
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+      
+      - name: Upload Drift Report
+        if: steps.plan.outputs.drift_detected == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report-${{ matrix.layer }}-${{ matrix.environment }}
+          path: layers/${{ matrix.layer }}/environments/${{ matrix.environment }}/plan-output.txt
+          retention-days: 30
+
+  notify:
+    name: Send Notifications
+    needs: detect-drift
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check for Drift
+        id: check
+        run: |
+          # This job runs after all drift checks
+          # Can aggregate results and send summary
+          echo "Drift detection complete"
+      
+      - name: Send Slack Notification
+        if: github.event_name == 'schedule'
+        run: |
+          # Uncomment and configure Slack webhook
+          # 
+          # curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+          #   -H 'Content-Type: application/json' \
+          #   -d '{
+          #     "text": "Drift Detection Complete",
+          #     "blocks": [{
+          #       "type": "section",
+          #       "text": {
+          #         "type": "mrkdwn",
+          #         "text": "*Daily Drift Detection Complete*\nCheck GitHub Issues for any drift alerts."
+          #       }
+          #     }]
+          #   }'
+          
+          echo "Configure SLACK_WEBHOOK_URL secret to enable Slack notifications"
+      
+      - name: Generate Summary
+        run: |
+          echo "# Drift Detection Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Run Time:** $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Drift detection complete. Check individual jobs for details." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Quick Actions" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- [View Open Drift Issues](../../issues?q=is%3Aissue+is%3Aopen+label%3Adrift-detection)" >> $GITHUB_STEP_SUMMARY
+          echo "- [View Workflow Runs](../../actions/workflows/drift-detection.yml)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Drift Detection Guide](../../blob/main/DRIFT_DETECTION_GUIDE.md)" >> $GITHUB_STEP_SUMMARY

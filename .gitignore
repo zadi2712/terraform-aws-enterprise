@@ -1,6 +1,11 @@
 # Terraform files
 **/.terraform/
 **/.terraform.lock.hcl
+
+# Drift detection reports (keep CHANGELOG.md)
+drift-reports/*.txt
+drift-reports/*.json
+!drift-reports/CHANGELOG.md
 *.tfstate
 *.tfstate.*
 *.tfvars.backup
