@@ -254,22 +254,45 @@ eks_log_retention_days = 90
 
 ### ECS Configuration
 
+The compute layer now includes comprehensive ECS support with IAM roles, security groups, and service discovery.
+
 #### Basic ECS Cluster
+
+Minimal ECS setup for development:
 
 ```hcl
 enable_ecs = true
 enable_container_insights = true
 
 ecs_capacity_providers = ["FARGATE", "FARGATE_SPOT"]
+
+ecs_default_capacity_provider_strategy = [
+  {
+    capacity_provider = "FARGATE"
+    weight            = 1
+    base              = 1
+  }
+]
+
+# Enable IAM roles
+ecs_create_task_execution_role = true
+ecs_create_task_role           = true
+
+# Enable security group
+ecs_create_security_group = true
+ecs_task_container_port   = 8080
 ```
 
 #### Production ECS Cluster
+
+Production-ready configuration with all features:
 
 ```hcl
 enable_ecs = true
 enable_container_insights = true
 
-ecs_capacity_providers = ["FARGATE", "FARGATE_SPOT", "EC2"]
+# Capacity providers with balanced strategy
+ecs_capacity_providers = ["FARGATE", "FARGATE_SPOT"]
 
 ecs_default_capacity_provider_strategy = [
   {
@@ -283,7 +306,52 @@ ecs_default_capacity_provider_strategy = [
     base              = 0
   }
 ]
+
+# Network configuration
+ecs_create_security_group = true
+ecs_task_container_port   = 8080
+
+# IAM roles for tasks
+ecs_create_task_execution_role = true
+ecs_create_task_role           = true
+
+# Service discovery for microservices
+ecs_enable_service_discovery    = true
+ecs_service_discovery_namespace = "services.internal"
+
+# Logging and debugging
+ecs_enable_execute_command = false  # Disabled in prod for security
+ecs_log_retention_days     = 30
 ```
+
+#### ECS with Service Discovery
+
+For microservices architectures:
+
+```hcl
+enable_ecs = true
+
+# Enable service discovery
+ecs_enable_service_discovery    = true
+ecs_service_discovery_namespace = "myapp.local"
+
+# Services can communicate via DNS: service-name.myapp.local
+```
+
+#### ECS Variables Reference
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ecs_capacity_providers` | List of capacity providers | `["FARGATE", "FARGATE_SPOT"]` |
+| `ecs_default_capacity_provider_strategy` | Capacity provider strategy | See defaults |
+| `ecs_create_security_group` | Create security group for tasks | `true` |
+| `ecs_task_container_port` | Container port | `8080` |
+| `ecs_create_task_execution_role` | Create task execution role | `true` |
+| `ecs_create_task_role` | Create task role | `true` |
+| `ecs_enable_service_discovery` | Enable Cloud Map | `false` |
+| `ecs_service_discovery_namespace` | Service discovery namespace | `"local"` |
+| `ecs_enable_execute_command` | Enable ECS Exec | `false` |
+| `ecs_log_retention_days` | Log retention days | `7` |
 
 ### Lambda Configuration
 
@@ -331,9 +399,29 @@ eks_kubeconfig_command               # kubectl config command
 ### ECS Outputs
 
 ```hcl
-ecs_cluster_id     # ECS cluster ID
-ecs_cluster_name   # ECS cluster name
-ecs_cluster_arn    # ECS cluster ARN
+# Cluster
+ecs_cluster_id                             # ECS cluster ID
+ecs_cluster_name                           # ECS cluster name
+ecs_cluster_arn                            # ECS cluster ARN
+
+# IAM Roles
+ecs_task_execution_role_arn                # Task execution role ARN
+ecs_task_execution_role_name               # Task execution role name
+ecs_task_role_arn                          # Task role ARN
+ecs_task_role_name                         # Task role name
+
+# Network
+ecs_security_group_id                      # Tasks security group ID
+ecs_security_group_arn                     # Tasks security group ARN
+
+# Service Discovery
+ecs_service_discovery_namespace_id         # Cloud Map namespace ID
+ecs_service_discovery_namespace_arn        # Cloud Map namespace ARN
+ecs_service_discovery_namespace_hosted_zone # Route53 hosted zone ID
+
+# Logging
+ecs_exec_command_log_group_name            # ECS Exec log group name
+ecs_exec_command_log_group_arn             # ECS Exec log group ARN
 ```
 
 ### Lambda Outputs
@@ -374,10 +462,98 @@ lambda_execution_role_arn   # Lambda execution role
 
 ### For ECS
 
-1. **Create task definitions**
-2. **Create services**
-3. **Configure service discovery**
-4. **Set up auto-scaling**
+1. **Verify cluster creation:**
+   ```bash
+   aws ecs describe-clusters --clusters myproject-dev-ecs
+   ```
+
+2. **Create task definitions:**
+   ```bash
+   # The compute layer provides IAM roles, use them:
+   # - Task Execution Role: ecs_task_execution_role_arn
+   # - Task Role: ecs_task_role_arn
+   # - Security Group: ecs_security_group_id
+   
+   # Example task definition:
+   cat > task-definition.json <<EOF
+   {
+     "family": "myapp",
+     "networkMode": "awsvpc",
+     "requiresCompatibilities": ["FARGATE"],
+     "cpu": "256",
+     "memory": "512",
+     "executionRoleArn": "$(terraform output -raw ecs_task_execution_role_arn)",
+     "taskRoleArn": "$(terraform output -raw ecs_task_role_arn)",
+     "containerDefinitions": [{
+       "name": "app",
+       "image": "nginx:latest",
+       "portMappings": [{
+         "containerPort": 80,
+         "protocol": "tcp"
+       }],
+       "logConfiguration": {
+         "logDriver": "awslogs",
+         "options": {
+           "awslogs-group": "/ecs/myapp",
+           "awslogs-region": "us-east-1",
+           "awslogs-stream-prefix": "app"
+         }
+       }
+     }]
+   }
+   EOF
+   
+   aws ecs register-task-definition --cli-input-json file://task-definition.json
+   ```
+
+3. **Create ECS services:**
+   ```bash
+   aws ecs create-service \
+     --cluster myproject-dev-ecs \
+     --service-name myapp \
+     --task-definition myapp:1 \
+     --desired-count 2 \
+     --launch-type FARGATE \
+     --network-configuration "awsvpcConfiguration={
+       subnets=[subnet-xxx,subnet-yyy],
+       securityGroups=[$(terraform output -raw ecs_security_group_id)],
+       assignPublicIp=DISABLED
+     }"
+   ```
+
+4. **Configure auto-scaling:**
+   ```bash
+   # Register scalable target
+   aws application-autoscaling register-scalable-target \
+     --service-namespace ecs \
+     --resource-id service/myproject-dev-ecs/myapp \
+     --scalable-dimension ecs:service:DesiredCount \
+     --min-capacity 2 \
+     --max-capacity 10
+   
+   # Create scaling policy
+   aws application-autoscaling put-scaling-policy \
+     --service-namespace ecs \
+     --resource-id service/myproject-dev-ecs/myapp \
+     --scalable-dimension ecs:service:DesiredCount \
+     --policy-name cpu-scaling \
+     --policy-type TargetTrackingScaling \
+     --target-tracking-scaling-policy-configuration file://scaling-policy.json
+   ```
+
+5. **Use ECS Exec for debugging (if enabled):**
+   ```bash
+   # Get task ID
+   TASK_ID=$(aws ecs list-tasks --cluster myproject-dev-ecs --service-name myapp --query 'taskArns[0]' --output text)
+   
+   # Connect to task
+   aws ecs execute-command \
+     --cluster myproject-dev-ecs \
+     --task $TASK_ID \
+     --container app \
+     --interactive \
+     --command "/bin/bash"
+   ```
 
 ## Maintenance
 

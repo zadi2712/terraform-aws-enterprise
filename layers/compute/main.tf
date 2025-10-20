@@ -43,6 +43,15 @@ data "terraform_remote_state" "security" {
   }
 }
 
+data "terraform_remote_state" "storage" {
+  backend = "s3"
+  config = {
+    bucket = "terraform-state-${var.environment}-${data.aws_caller_identity.current.account_id}"
+    key    = "layers/storage/${var.environment}/terraform.tfstate"
+    region = var.aws_region
+  }
+}
+
 data "aws_caller_identity" "current" {}
 
 ################################################################################
@@ -169,15 +178,29 @@ module "ecs_cluster" {
   cluster_name               = "${var.project_name}-${var.environment}-ecs"
   container_insights_enabled = var.enable_container_insights
 
-  capacity_providers = ["FARGATE", "FARGATE_SPOT"]
+  # Network configuration
+  vpc_id                = data.terraform_remote_state.networking.outputs.vpc_id
+  create_security_group = var.ecs_create_security_group
+  alb_security_group_id = var.enable_alb && var.ecs_create_security_group ? module.alb_security_group[0].security_group_id : null
+  task_container_port   = var.ecs_task_container_port
 
-  default_capacity_provider_strategy = [
-    {
-      capacity_provider = "FARGATE"
-      weight            = 1
-      base              = 1
-    }
-  ]
+  # Capacity providers
+  capacity_providers = var.ecs_capacity_providers
+
+  default_capacity_provider_strategy = var.ecs_default_capacity_provider_strategy
+
+  # IAM roles
+  create_task_execution_role = var.ecs_create_task_execution_role
+  create_task_role           = var.ecs_create_task_role
+
+  # Service discovery
+  enable_service_discovery    = var.ecs_enable_service_discovery
+  service_discovery_namespace = var.ecs_service_discovery_namespace
+
+  # Logging and debugging
+  enable_execute_command = var.ecs_enable_execute_command
+  log_retention_days     = var.ecs_log_retention_days
+  kms_key_arn            = try(data.terraform_remote_state.security.outputs.kms_key_arn, null)
 
   tags = var.common_tags
 }
@@ -340,9 +363,14 @@ module "ssm_outputs" {
     eks_external_dns_iam_role_arn              = var.enable_eks ? module.eks_cluster[0].external_dns_iam_role_arn : null
 
     # ECS
-    ecs_cluster_id   = var.enable_ecs ? module.ecs_cluster[0].cluster_id : null
-    ecs_cluster_name = var.enable_ecs ? module.ecs_cluster[0].cluster_name : null
-    ecs_cluster_arn  = var.enable_ecs ? module.ecs_cluster[0].cluster_arn : null
+    ecs_cluster_id                      = var.enable_ecs ? module.ecs_cluster[0].cluster_id : null
+    ecs_cluster_name                    = var.enable_ecs ? module.ecs_cluster[0].cluster_name : null
+    ecs_cluster_arn                     = var.enable_ecs ? module.ecs_cluster[0].cluster_arn : null
+    ecs_task_execution_role_arn         = var.enable_ecs ? module.ecs_cluster[0].task_execution_role_arn : null
+    ecs_task_role_arn                   = var.enable_ecs ? module.ecs_cluster[0].task_role_arn : null
+    ecs_security_group_id               = var.enable_ecs ? module.ecs_cluster[0].security_group_id : null
+    ecs_service_discovery_namespace_id  = var.enable_ecs ? module.ecs_cluster[0].service_discovery_namespace_id : null
+    ecs_service_discovery_namespace_arn = var.enable_ecs ? module.ecs_cluster[0].service_discovery_namespace_arn : null
 
     # ALB
     alb_arn               = var.enable_alb ? module.alb[0].lb_arn : null
@@ -373,6 +401,11 @@ module "ssm_outputs" {
     ecs_cluster_id                             = "ECS cluster ID"
     ecs_cluster_name                           = "ECS cluster name"
     ecs_cluster_arn                            = "ECS cluster ARN"
+    ecs_task_execution_role_arn                = "ECS task execution role ARN"
+    ecs_task_role_arn                          = "ECS task role ARN"
+    ecs_security_group_id                      = "ECS tasks security group ID"
+    ecs_service_discovery_namespace_id         = "ECS service discovery namespace ID"
+    ecs_service_discovery_namespace_arn        = "ECS service discovery namespace ARN"
     alb_arn                                    = "Application Load Balancer ARN"
     alb_dns_name                               = "Application Load Balancer DNS name"
     alb_zone_id                                = "Application Load Balancer Route53 zone ID"

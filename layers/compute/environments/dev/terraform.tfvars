@@ -98,6 +98,45 @@ eks_access_entries = {
 }
 
 ################################################################################
+# ECS Configuration - Development (Optional)
+################################################################################
+
+# Enable ECS if needed for development
+# enable_ecs = true
+
+# ECS capacity providers - prefer Spot for dev to save costs
+ecs_capacity_providers = ["FARGATE", "FARGATE_SPOT"]
+
+ecs_default_capacity_provider_strategy = [
+  {
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 2
+    base              = 0
+  },
+  {
+    capacity_provider = "FARGATE"
+    weight            = 1
+    base              = 1
+  }
+]
+
+# Network and security
+ecs_create_security_group = true
+ecs_task_container_port   = 8080
+
+# IAM roles
+ecs_create_task_execution_role = true
+ecs_create_task_role           = true
+
+# Service discovery - enable for microservices
+ecs_enable_service_discovery    = false
+ecs_service_discovery_namespace = "dev.local"
+
+# Debugging - enable in dev
+ecs_enable_execute_command = true
+ecs_log_retention_days     = 3
+
+################################################################################
 # Bastion Configuration
 ################################################################################
 

@@ -134,6 +134,61 @@ output "ecs_cluster_arn" {
   value       = var.enable_ecs ? module.ecs_cluster[0].cluster_arn : null
 }
 
+output "ecs_task_execution_role_arn" {
+  description = "ECS task execution role ARN"
+  value       = var.enable_ecs ? module.ecs_cluster[0].task_execution_role_arn : null
+}
+
+output "ecs_task_execution_role_name" {
+  description = "ECS task execution role name"
+  value       = var.enable_ecs ? module.ecs_cluster[0].task_execution_role_name : null
+}
+
+output "ecs_task_role_arn" {
+  description = "ECS task role ARN"
+  value       = var.enable_ecs ? module.ecs_cluster[0].task_role_arn : null
+}
+
+output "ecs_task_role_name" {
+  description = "ECS task role name"
+  value       = var.enable_ecs ? module.ecs_cluster[0].task_role_name : null
+}
+
+output "ecs_security_group_id" {
+  description = "ECS tasks security group ID"
+  value       = var.enable_ecs ? module.ecs_cluster[0].security_group_id : null
+}
+
+output "ecs_security_group_arn" {
+  description = "ECS tasks security group ARN"
+  value       = var.enable_ecs ? module.ecs_cluster[0].security_group_arn : null
+}
+
+output "ecs_service_discovery_namespace_id" {
+  description = "ECS service discovery namespace ID"
+  value       = var.enable_ecs ? module.ecs_cluster[0].service_discovery_namespace_id : null
+}
+
+output "ecs_service_discovery_namespace_arn" {
+  description = "ECS service discovery namespace ARN"
+  value       = var.enable_ecs ? module.ecs_cluster[0].service_discovery_namespace_arn : null
+}
+
+output "ecs_service_discovery_namespace_hosted_zone" {
+  description = "ECS service discovery namespace Route53 hosted zone ID"
+  value       = var.enable_ecs ? module.ecs_cluster[0].service_discovery_namespace_hosted_zone : null
+}
+
+output "ecs_exec_command_log_group_name" {
+  description = "ECS Exec CloudWatch log group name"
+  value       = var.enable_ecs ? module.ecs_cluster[0].exec_command_log_group_name : null
+}
+
+output "ecs_exec_command_log_group_arn" {
+  description = "ECS Exec CloudWatch log group ARN"
+  value       = var.enable_ecs ? module.ecs_cluster[0].exec_command_log_group_arn : null
+}
+
 ################################################################################
 # ALB Outputs
 ################################################################################

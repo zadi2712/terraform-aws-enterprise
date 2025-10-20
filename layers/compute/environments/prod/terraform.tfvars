@@ -220,6 +220,45 @@ eks_access_entries = {
 }
 
 ################################################################################
+# ECS Configuration - Production (Optional)
+################################################################################
+
+# Enable ECS if needed for production
+# enable_ecs = true
+
+# ECS capacity providers - balanced strategy for production
+ecs_capacity_providers = ["FARGATE", "FARGATE_SPOT"]
+
+ecs_default_capacity_provider_strategy = [
+  {
+    capacity_provider = "FARGATE"
+    weight            = 2
+    base              = 2
+  },
+  {
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 1
+    base              = 0
+  }
+]
+
+# Network and security
+ecs_create_security_group = true
+ecs_task_container_port   = 8080
+
+# IAM roles
+ecs_create_task_execution_role = true
+ecs_create_task_role           = true
+
+# Service discovery - enable for microservices architectures
+ecs_enable_service_discovery    = true
+ecs_service_discovery_namespace = "services.internal"
+
+# Debugging - disabled in production for security
+ecs_enable_execute_command = false
+ecs_log_retention_days     = 30
+
+################################################################################
 # Bastion Configuration
 ################################################################################
 

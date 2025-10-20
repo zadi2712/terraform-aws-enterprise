@@ -110,6 +110,80 @@ variable "enable_container_insights" {
 }
 
 ################################################################################
+# ECS Configuration
+################################################################################
+
+variable "ecs_capacity_providers" {
+  description = "ECS capacity providers"
+  type        = list(string)
+  default     = ["FARGATE", "FARGATE_SPOT"]
+}
+
+variable "ecs_default_capacity_provider_strategy" {
+  description = "ECS default capacity provider strategy"
+  type = list(object({
+    capacity_provider = string
+    weight            = number
+    base              = optional(number, 0)
+  }))
+  default = [
+    {
+      capacity_provider = "FARGATE"
+      weight            = 1
+      base              = 1
+    }
+  ]
+}
+
+variable "ecs_create_security_group" {
+  description = "Whether to create a security group for ECS tasks"
+  type        = bool
+  default     = true
+}
+
+variable "ecs_task_container_port" {
+  description = "Container port for ECS tasks"
+  type        = number
+  default     = 8080
+}
+
+variable "ecs_create_task_execution_role" {
+  description = "Whether to create ECS task execution role"
+  type        = bool
+  default     = true
+}
+
+variable "ecs_create_task_role" {
+  description = "Whether to create ECS task role"
+  type        = bool
+  default     = true
+}
+
+variable "ecs_enable_service_discovery" {
+  description = "Enable AWS Cloud Map service discovery for ECS"
+  type        = bool
+  default     = false
+}
+
+variable "ecs_service_discovery_namespace" {
+  description = "ECS service discovery namespace"
+  type        = string
+  default     = "local"
+}
+
+variable "ecs_enable_execute_command" {
+  description = "Enable ECS Exec for debugging"
+  type        = bool
+  default     = false
+}
+
+variable "ecs_log_retention_days" {
+  description = "CloudWatch log retention for ECS Exec"
+  type        = number
+  default     = 7
+}
+
+################################################################################
 # EKS Configuration
 ################################################################################
 
