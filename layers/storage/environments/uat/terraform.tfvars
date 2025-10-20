@@ -67,3 +67,44 @@ efs_access_points = {
 
 # Replication - optional for UAT
 efs_enable_replication = false
+
+################################################################################
+# S3 Configuration - UAT (Production-like)
+################################################################################
+
+s3_force_destroy          = false
+s3_enable_kms_encryption  = true
+s3_enable_access_logging  = true
+
+s3_app_versioning_enabled = true
+
+s3_app_lifecycle_rules = [
+  {
+    id      = "lifecycle-management"
+    enabled = true
+    transitions = [
+      {
+        days          = 30
+        storage_class = "STANDARD_IA"
+      },
+      {
+        days          = 90
+        storage_class = "GLACIER_IR"
+      }
+    ]
+    noncurrent_version_transitions = [
+      {
+        noncurrent_days = 30
+        storage_class   = "STANDARD_IA"
+      }
+    ]
+    noncurrent_version_expiration = {
+      noncurrent_days = 90
+    }
+  }
+]
+
+s3_app_intelligent_tiering = {}
+s3_app_replication_enabled = false
+s3_logs_lifecycle_enabled = true
+s3_logs_intelligent_tiering_enabled = false

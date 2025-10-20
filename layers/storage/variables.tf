@@ -19,6 +19,70 @@ variable "logs_retention_days" {
   default     = 90
 }
 
+################################################################################
+# S3 Configuration
+################################################################################
+
+variable "s3_force_destroy" {
+  description = "Allow bucket deletion with objects (non-prod only)"
+  type        = bool
+  default     = false
+}
+
+variable "s3_enable_kms_encryption" {
+  description = "Enable KMS encryption for S3 buckets"
+  type        = bool
+  default     = true
+}
+
+variable "s3_app_versioning_enabled" {
+  description = "Enable versioning for application bucket"
+  type        = bool
+  default     = true
+}
+
+variable "s3_app_lifecycle_rules" {
+  description = "Lifecycle rules for application bucket"
+  type        = list(any)
+  default     = []
+}
+
+variable "s3_app_intelligent_tiering" {
+  description = "Intelligent Tiering configurations for application bucket"
+  type        = any
+  default     = {}
+}
+
+variable "s3_app_replication_enabled" {
+  description = "Enable replication for application bucket"
+  type        = bool
+  default     = false
+}
+
+variable "s3_app_replication_rules" {
+  description = "Replication rules for application bucket"
+  type        = any
+  default     = {}
+}
+
+variable "s3_logs_lifecycle_enabled" {
+  description = "Enable lifecycle transitions for logs bucket"
+  type        = bool
+  default     = true
+}
+
+variable "s3_logs_intelligent_tiering_enabled" {
+  description = "Enable intelligent tiering for logs bucket"
+  type        = bool
+  default     = false
+}
+
+variable "s3_enable_access_logging" {
+  description = "Enable S3 access logging"
+  type        = bool
+  default     = false
+}
+
 variable "common_tags" {
   description = "Common tags"
   type        = map(string)

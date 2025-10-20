@@ -110,3 +110,85 @@ efs_replication_destination_region = "us-west-2"
 # 5. Consider replication for DR
 # 6. Review and set file system policy if needed
 # 7. Monitor EFS metrics in CloudWatch
+
+################################################################################
+# S3 Configuration - Production
+################################################################################
+
+# S3 global settings
+s3_force_destroy          = false  # Never allow in production
+s3_enable_kms_encryption  = true   # Always encrypt in production
+s3_enable_access_logging  = true   # Enable logging for audit
+
+# Application bucket configuration
+s3_app_versioning_enabled = true
+
+s3_app_lifecycle_rules = [
+  {
+    id      = "intelligent-lifecycle"
+    enabled = true
+    
+    transitions = [
+      {
+        days          = 30
+        storage_class = "STANDARD_IA"
+      },
+      {
+        days          = 90
+        storage_class = "GLACIER_IR"
+      },
+      {
+        days          = 180
+        storage_class = "GLACIER"
+      }
+    ]
+    
+    noncurrent_version_transitions = [
+      {
+        noncurrent_days = 30
+        storage_class   = "STANDARD_IA"
+      },
+      {
+        noncurrent_days = 90
+        storage_class   = "GLACIER"
+      }
+    ]
+    
+    noncurrent_version_expiration = {
+      noncurrent_days = 180
+    }
+    
+    abort_incomplete_multipart_upload_days = 7
+  }
+]
+
+# Intelligent Tiering for cost optimization
+s3_app_intelligent_tiering = {
+  entire_bucket = {
+    tierings = [
+      {
+        access_tier = "ARCHIVE_ACCESS"
+        days        = 90
+      },
+      {
+        access_tier = "DEEP_ARCHIVE_ACCESS"
+        days        = 180
+      }
+    ]
+  }
+}
+
+# Replication for disaster recovery (optional)
+s3_app_replication_enabled = false  # Set to true for DR
+# s3_app_replication_rules = {
+#   dr_replica = {
+#     destination_bucket = "arn:aws:s3:::myapp-prod-dr-ACCOUNT_ID"
+#     replica_kms_key_id = "arn:aws:kms:us-west-2:ACCOUNT_ID:key/xxxxx"
+#     replication_time_enabled = true
+#     delete_marker_replication = true
+#   }
+# }
+
+# Logs bucket lifecycle
+s3_logs_lifecycle_enabled           = true
+s3_logs_intelligent_tiering_enabled = true

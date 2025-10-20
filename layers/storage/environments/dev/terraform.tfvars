@@ -68,3 +68,36 @@ efs_access_points = {
 
 # Replication - not needed for dev
 efs_enable_replication = false
+
+################################################################################
+# S3 Configuration - Development
+################################################################################
+
+# S3 global settings
+s3_force_destroy          = true  # Allow easy cleanup in dev
+s3_enable_kms_encryption  = false # Optional for dev (save costs)
+s3_enable_access_logging  = false # Disable to save costs
+
+# Application bucket
+s3_app_versioning_enabled = true
+
+s3_app_lifecycle_rules = [
+  {
+    id      = "transition-to-ia"
+    enabled = true
+    transitions = [
+      {
+        days          = 30
+        storage_class = "STANDARD_IA"
+      }
+    ]
+  }
+]
+
+s3_app_intelligent_tiering  = {}
+s3_app_replication_enabled  = false
+s3_app_replication_rules    = {}
+
+# Logs bucket lifecycle
+s3_logs_lifecycle_enabled             = true
+s3_logs_intelligent_tiering_enabled   = false

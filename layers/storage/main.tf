@@ -51,13 +51,59 @@ module "application_bucket" {
   source = "../../../modules/s3"
 
   bucket_name        = "${var.project_name}-${var.environment}-app-${data.aws_caller_identity.current.account_id}"
-  versioning_enabled = true
+  versioning_enabled = var.s3_app_versioning_enabled
+  force_destroy      = var.environment != "prod" ? var.s3_force_destroy : false
 
+  # Encryption
+  kms_key_id         = var.s3_enable_kms_encryption ? try(data.terraform_remote_state.security.outputs.kms_s3_key_arn, data.terraform_remote_state.security.outputs.kms_key_arn, null) : null
+  bucket_key_enabled = var.s3_enable_kms_encryption
+
+  # Security
+  block_public_access                   = true
+  attach_deny_insecure_transport_policy = true
+
+  # Lifecycle management
+  lifecycle_rules = var.s3_app_lifecycle_rules
+
+  # Intelligent Tiering (optional)
+  intelligent_tiering_configurations = var.s3_app_intelligent_tiering
+
+  # Replication (optional)
+  replication_enabled = var.s3_app_replication_enabled
+  replication_rules   = var.s3_app_replication_rules
+
+  # Logging (optional)
+  logging_enabled       = var.s3_enable_access_logging
+  logging_target_bucket = var.s3_enable_access_logging ? module.logs_bucket.bucket_id : null
+  logging_target_prefix = "s3-access/application/"
+
+  tags = merge(var.common_tags, {
+    BucketType = "application"
+  })
+}
+
+module "logs_bucket" {
+  source = "../../../modules/s3"
+
+  bucket_name        = "${var.project_name}-${var.environment}-logs-${data.aws_caller_identity.current.account_id}"
+  versioning_enabled = false  # Not needed for logs
+  force_destroy      = var.environment != "prod" ? var.s3_force_destroy : false
+
+  # Encryption
+  kms_key_id         = var.s3_enable_kms_encryption ? try(data.terraform_remote_state.security.outputs.kms_s3_key_arn, data.terraform_remote_state.security.outputs.kms_key_arn, null) : null
+  bucket_key_enabled = var.s3_enable_kms_encryption
+
+  # Security
+  block_public_access                   = true
+  attach_deny_insecure_transport_policy = true
+
+  # Lifecycle - expire logs after retention period
   lifecycle_rules = [
     {
-      id      = "transition-to-ia"
+      id      = "expire-old-logs"
       enabled = true
-      transitions = [
+      
+      transitions = var.s3_logs_lifecycle_enabled ? [
         {
           days          = 30
           storage_class = "STANDARD_IA"
@@ -66,30 +112,29 @@ module "application_bucket" {
           days          = 90
           storage_class = "GLACIER"
         }
-      ]
-    }
-  ]
-
-  tags = var.common_tags
-}
-
-module "logs_bucket" {
-  source = "../../../modules/s3"
-
-  bucket_name        = "${var.project_name}-${var.environment}-logs-${data.aws_caller_identity.current.account_id}"
-  versioning_enabled = true
-
-  lifecycle_rules = [
-    {
-      id      = "expire-old-logs"
-      enabled = true
+      ] : []
+      
       expiration = {
         days = var.logs_retention_days
       }
     }
   ]
 
-  tags = var.common_tags
+  # Intelligent Tiering for logs (optional)
+  intelligent_tiering_configurations = var.s3_logs_intelligent_tiering_enabled ? {
+    logs = {
+      tierings = [
+        {
+          access_tier = "ARCHIVE_ACCESS"
+          days        = 90
+        }
+      ]
+    }
+  } : {}
+
+  tags = merge(var.common_tags, {
+    BucketType = "logs"
+  })
 }
 
 ################################################################################
